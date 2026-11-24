@@ -1,0 +1,2899 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Dual-Deck Pro DJ + Master, Hot Cues & Nudge</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20,400,0,0" />
+  <style>
+    :root {
+      --bg: #000000;
+      --panel: #121212;
+      --surface: #181818;
+      --surface-elevated: #242424;
+      --surface-hover: #2a2a2a;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --text: #ffffff;
+      --muted: #b3b3b3;
+      --subtle: #9a9a9a;
+      --accent: #1db954;
+      --accent-hover: #1ed760;
+      --deck-a: #3b82f6;
+      --deck-b: #f43f5e;
+      --cue: #f59e0b;
+      --warn: #f15e6c;
+      --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+    }
+
+    ::selection {
+      background: rgba(29, 185, 84, 0.32);
+      color: #ffffff;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    body {
+      margin: 0;
+      padding: 40px 16px 28px;
+      background: var(--bg);
+      color: var(--text);
+      caret-color: var(--accent);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin: 0 0 14px 0;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h1::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: inline-block;
+    }
+
+    .console {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) 252px minmax(280px, 1fr);
+      gap: 10px;
+      width: 100%;
+      max-width: 1240px;
+      position: relative;
+      z-index: 0;
+    }
+
+    @media (max-width: 960px) {
+      .console { grid-template-columns: 1fr; }
+    }
+
+    .deck, .mixer, .queue-panel {
+      background: var(--panel);
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: background 0.2s, box-shadow 0.25s;
+      position: relative;
+    }
+    .deck > *:not(.video-stage) {
+      position: relative;
+      z-index: 1;
+    }
+    .video-stage {
+      position: relative;
+      width: 100%;
+    }
+
+    /* SIDE PEEKING VINYL (aligned & sized to video-wrapper) */
+    .side-vinyl {
+      position: absolute;
+      top: 50%;
+      height: 100%;
+      aspect-ratio: 1 / 1;
+      width: auto;
+      transform: translateY(-50%);
+      z-index: -1;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+      transition: left 0.25s ease, right 0.25s ease;
+    }
+    .side-vinyl.is-scratching { cursor: grabbing; }
+    .side-vinyl.is-scratching .side-vinyl-disc { animation: none; }
+    .scratch-hud {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.85);
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(29, 185, 84, 0.45);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+      z-index: 3;
+    }
+    .side-vinyl.is-scratching .scratch-hud { opacity: 1; }
+    .deck-a .side-vinyl { left: calc(-28.125% - 14px); }
+    .deck-a .side-vinyl:hover { left: calc(-28.125% - 26px); }
+    .deck-b .side-vinyl { right: calc(-28.125% - 14px); }
+    .deck-b .side-vinyl:hover { right: calc(-28.125% - 26px); }
+
+    .side-vinyl-disc {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 25deg, rgba(255,255,255,0.09) 0deg, transparent 35deg, transparent 180deg, rgba(255,255,255,0.06) 215deg, transparent 250deg),
+        radial-gradient(circle at center, #0d0d0d 0%, #0d0d0d 34%, #181818 35%, #0f0f0f 52%, #1a1a1a 53%, #101010 72%, #1b1b1b 73%, #0b0b0b 100%);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: spinVinyl 2.8s linear infinite;
+      animation-play-state: paused;
+    }
+    .deck.is-playing .side-vinyl-disc {
+      animation-play-state: running;
+    }
+    .side-vinyl-label {
+      width: 34%;
+      height: 34%;
+      border-radius: 50%;
+      background: var(--surface-elevated);
+      background-size: cover;
+      background-position: center;
+      border: 3px solid #090909;
+      position: relative;
+    }
+    @media (max-width: 1120px) {
+      .side-vinyl { display: none; }
+    }
+
+    @keyframes pulseWarning {
+      0%, 100% { box-shadow: inset 0 0 0 1px rgba(241, 94, 108, 0.75); }
+      50% { box-shadow: inset 0 0 0 1px transparent; }
+    }
+    .deck.ending-soon {
+      animation: pulseWarning 1.1s infinite;
+    }
+
+    .deck-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+    .deck-header > span:first-child {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text);
+    }
+    .deck-header > span:first-child::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .deck-a .deck-header > span:first-child::before { background: var(--deck-a); }
+    .deck-b .deck-header > span:first-child::before { background: var(--deck-b); }
+
+    .bpm-box { display: flex; align-items: center; gap: 4px; }
+    .bpm-badge {
+      background: var(--surface);
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .btn-tap {
+      padding: 3px 8px;
+      font-size: 0.68rem;
+      letter-spacing: 0.05em;
+      background: transparent;
+      border-radius: 999px;
+      color: var(--muted);
+    }
+    .btn-tap:hover { color: var(--text); background: var(--surface-elevated); }
+    .btn-tap:active { background: var(--accent); color: #000; }
+
+    .url-bar { display: flex; gap: 6px; }
+    input[type="text"] {
+      flex: 1;
+      background: var(--surface-elevated);
+      border: 1px solid transparent;
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      outline: none;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    input[type="text"]:focus {
+      background: var(--surface-hover);
+      border-color: var(--border-strong);
+    }
+    input[type="text"]::placeholder { color: #8c8c8c; }
+
+    button {
+      background: var(--surface-elevated);
+      color: var(--text);
+      border: none;
+      padding: 7px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.76rem;
+      transition: background 0.15s, color 0.15s, transform 0.1s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+    .material-symbols-rounded {
+      font-size: 16px;
+      line-height: 1;
+      vertical-align: middle;
+      user-select: none;
+    }
+    button:hover { background: var(--surface-hover); }
+    button:active { transform: scale(0.97); }
+
+    .btn-play {
+      background: var(--accent);
+      color: #000000;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border-radius: 50%;
+    }
+    .btn-play:hover { background: var(--accent-hover); transform: scale(1.04); }
+    .btn-play .material-symbols-rounded { font-size: 20px; }
+
+    .btn-cue {
+      background: var(--surface-elevated);
+      color: #fbbf24;
+      padding: 7px 12px;
+      font-weight: 700;
+    }
+    .btn-cue:hover { background: var(--surface-hover); }
+    .btn-cue.active-flash { background: var(--cue); color: #000; }
+
+    .kbd-hint {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.09);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 0.64rem;
+      font-family: var(--mono);
+      color: var(--muted);
+    }
+
+    .video-wrapper {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      min-height: 200px;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .video-wrapper iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .video-lock-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      background: transparent;
+      display: none;
+      cursor: default;
+    }
+    body.video-locked .video-lock-overlay {
+      display: block;
+    }
+    .deck-title-bar {
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--text);
+      padding: 2px 2px 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Spotify-style thin range sliders */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.16);
+      height: 4px;
+      border-radius: 999px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.12s, background 0.12s;
+    }
+    input[type="range"]:hover::-webkit-slider-thumb {
+      background: var(--accent);
+      transform: scale(1.18);
+    }
+
+    .seek-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+    }
+    .seek-bar input[type="range"] { flex: 1; }
+    .rem-time { font-weight: 500; }
+    .rem-time.danger { color: var(--warn); }
+
+    .cue-setup {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 0.74rem;
+    }
+    .cue-setup input[type="text"] {
+      flex: 0 0 64px;
+      width: 64px;
+      padding: 4px 8px;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 0.74rem;
+    }
+    .cue-badge {
+      color: #fbbf24;
+      font-weight: 600;
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Hot Cues 1-3 */
+    .hot-cues-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .hot-cue-slot {
+      display: flex;
+      background: var(--surface);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .btn-hc-jump {
+      flex: 1;
+      border-radius: 0;
+      background: transparent;
+      font-size: 0.7rem;
+      padding: 6px 8px;
+      justify-content: flex-start;
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+    }
+    .btn-hc-jump:hover { background: var(--surface-elevated); color: var(--text); }
+    .btn-hc-jump.has-point { color: var(--accent); font-weight: 600; }
+    .btn-hc-set {
+      border-radius: 0;
+      background: transparent;
+      font-size: 0.65rem;
+      padding: 6px 6px;
+      color: var(--subtle);
+    }
+    .btn-hc-set:hover { color: var(--text); background: var(--surface-elevated); }
+    .btn-hc-clear {
+      border-radius: 0;
+      background: transparent;
+      font-size: 0.65rem;
+      padding: 6px 5px;
+      color: var(--subtle);
+    }
+    .btn-hc-clear:hover { color: var(--warn); background: rgba(241, 94, 108, 0.14); }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+    .loop-group { display: flex; gap: 4px; }
+    .btn-loop { font-size: 0.72rem; padding: 6px 10px; background: var(--surface); color: var(--muted); }
+    .btn-loop:hover { color: var(--text); background: var(--surface-elevated); }
+    .btn-loop.active {
+      background: var(--accent);
+      color: #000000;
+      font-weight: 700;
+    }
+
+    /* Pitch & Nudge */
+    .pitch-control {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--surface);
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+    .btn-nudge {
+      padding: 2px 6px;
+      font-size: 0.74rem;
+      font-family: var(--mono);
+      background: transparent;
+      color: var(--muted);
+      user-select: none;
+    }
+    .btn-nudge:hover { background: var(--surface-elevated); color: var(--text); }
+    .btn-nudge.nudging {
+      background: var(--accent);
+      color: #000;
+    }
+    .pitch-slider {
+      width: 58px;
+      accent-color: var(--accent);
+    }
+    .btn-pitch-reset {
+      background: transparent;
+      color: var(--text);
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      padding: 2px 4px;
+      min-width: 40px;
+    }
+    .btn-pitch-reset:hover {
+      background: var(--surface-elevated);
+      color: var(--accent);
+    }
+
+    .btn-lock-video {
+      width: 100%;
+      background: var(--surface);
+      color: var(--muted);
+      padding: 7px 10px;
+      font-size: 0.72rem;
+    }
+    .btn-lock-video.locked {
+      background: rgba(29, 185, 84, 0.16);
+      color: var(--accent);
+    }
+
+    /* MIXER + MASTER (Hardware Controller Knobs & Illuminated Pads) */
+    .mixer {
+      justify-content: space-between;
+      align-items: center;
+      text-align: center;
+    }
+    .knobs-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      width: 100%;
+      background: var(--surface);
+      padding: 12px 6px;
+      border-radius: 10px;
+    }
+    .knob-unit {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .knob-unit.master-ch { color: var(--accent); }
+    .knob-dial {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      cursor: ns-resize;
+      user-select: none;
+      touch-action: none;
+    }
+    .knob-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .knob-track {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.1);
+      stroke-width: 4;
+      stroke-linecap: round;
+    }
+    .knob-arc {
+      fill: none;
+      stroke-width: 4;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.05s linear;
+    }
+    .knob-cap {
+      position: absolute;
+      inset: 9px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #343434, #161616 70%);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.65);
+      pointer-events: none;
+    }
+    .knob-cap::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 2.5px;
+      height: 9px;
+      border-radius: 2px;
+      background: #ffffff;
+    }
+    .fader-val { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .knob-unit.master-ch .fader-val { color: var(--accent); }
+
+    /* Illuminated Hardware Pad Grid */
+    .pad-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      width: 100%;
+    }
+    .dj-pad {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      padding: 12px 8px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.1s;
+    }
+    .dj-pad:hover {
+      background: var(--surface-elevated);
+      color: var(--text);
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+    .dj-pad:active { transform: scale(0.97); }
+    .dj-pad .pad-icon { font-size: 24px; line-height: 1; }
+    .dj-pad .pad-label {
+      font-size: 0.66rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      line-height: 1.2;
+    }
+    .dj-pad .pad-led {
+      position: absolute;
+      top: 7px;
+      right: 8px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      transition: background 0.15s;
+    }
+    .dj-pad.is-on {
+      background: rgba(29, 185, 84, 0.14);
+      border-color: rgba(29, 185, 84, 0.55);
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(29, 185, 84, 0.18);
+    }
+    .dj-pad.is-on .pad-icon { color: var(--accent); }
+    .dj-pad.is-on .pad-led { background: var(--accent); }
+
+    .dj-pad.pad-talk.is-on {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: rgba(56, 189, 248, 0.6);
+      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.2);
+    }
+    .dj-pad.pad-talk.is-on .pad-icon { color: #38bdf8; }
+    .dj-pad.pad-talk.is-on .pad-led { background: #38bdf8; }
+
+    .auto-fade-box, .crossfader-box {
+      width: 100%;
+      background: var(--surface);
+      padding: 10px;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+    .auto-fade-header, .cf-labels {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    /* Tactile Segmented Duration Switch (2s | 4s | 6s) */
+    .seg-switch {
+      display: inline-flex;
+      background: #0d0d0d;
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      gap: 2px;
+    }
+    .seg-btn {
+      background: transparent;
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.68rem;
+      font-family: var(--mono);
+      font-weight: 600;
+      gap: 4px;
+    }
+    .seg-btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+    .seg-btn.is-active {
+      background: #282828;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+    .seg-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: transparent;
+    }
+    .seg-btn.is-active .seg-dot { background: var(--accent); }
+
+    /* Tactile Hardware Fade Keycaps */
+    .fade-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      background: #0b0b0b;
+      padding: 5px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .fade-btns button {
+      position: relative;
+      flex-direction: column;
+      padding: 14px 8px 10px;
+      gap: 4px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      transition: transform 0.08s, box-shadow 0.08s, background 0.15s, border-color 0.15s;
+    }
+    .fade-btns button:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.75);
+    }
+    .fade-tri {
+      font-size: 28px !important;
+      line-height: 1;
+    }
+    .btn-fade-a .fade-tri { transform: rotate(180deg); }
+    .fade-cap-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .btn-fade-a {
+      color: #93c5fd;
+      background: radial-gradient(circle at 50% 42%, #242936 0%, #191d26 72%);
+    }
+    .btn-fade-a:hover {
+      background: radial-gradient(circle at 50% 42%, rgba(59, 130, 246, 0.28) 0%, #1b2230 75%);
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+    .btn-fade-b {
+      color: #fda4af;
+      background: radial-gradient(circle at 50% 42%, #2e2026 0%, #20161b 72%);
+    }
+    .btn-fade-b:hover {
+      background: radial-gradient(circle at 50% 42%, rgba(244, 63, 94, 0.28) 0%, #291920 75%);
+      border-color: rgba(244, 63, 94, 0.5);
+    }
+
+    /* Hardware Crossfader Slot & Physical Fader Cap */
+    .cf-slot {
+      position: relative;
+      padding: 8px 0;
+      display: flex;
+      align-items: center;
+    }
+    .cf-ticks {
+      position: absolute;
+      inset: 0 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+    .cf-ticks span {
+      width: 1px;
+      height: 14px;
+      background: rgba(255, 255, 255, 0.16);
+    }
+    .cf-ticks span:nth-child(3) {
+      height: 20px;
+      width: 2px;
+      background: rgba(255, 255, 255, 0.35);
+    }
+    #crossfader {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      height: 8px;
+      background: #0a0a0a;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    #crossfader::-webkit-slider-thumb {
+      width: 20px;
+      height: 28px;
+      border-radius: 4px;
+      background: linear-gradient(180deg, #e5e5e5 0%, #b8b8b8 100%);
+      border: 1px solid #000;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.75);
+    }
+    #crossfader:hover::-webkit-slider-thumb {
+      background: linear-gradient(180deg, #ffffff 0%, #d4d4d4 100%);
+      transform: none;
+    }
+
+    /* Advanced Fade Settings Button & Modal */
+    .btn-fade-adv {
+      background: transparent;
+      color: var(--muted);
+      padding: 4px;
+      border-radius: 6px;
+    }
+    .btn-fade-adv:hover { color: var(--text); background: var(--surface-elevated); }
+    .btn-fade-adv.has-custom { color: var(--accent); }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      background: rgba(0, 0, 0, 0.72);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .adv-modal {
+      width: 100%;
+      max-width: 400px;
+      background: #141414;
+      border: 1px solid var(--border-strong);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .adv-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.84rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .adv-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .adv-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .adv-field input[type="number"] {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      outline: none;
+    }
+    .adv-field input[type="number"]:focus {
+      border-color: var(--accent);
+    }
+    .adv-row-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .cf-graph-box {
+      background: #0b0c0e;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 10px 10px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .cf-graph-svg {
+      width: 100%;
+      height: 92px;
+      display: block;
+    }
+    .cf-graph-legend {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      color: var(--muted);
+    }
+    .curve-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+    .curve-opt {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 4px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      color: var(--muted);
+    }
+    .curve-opt svg {
+      width: 28px;
+      height: 22px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .curve-opt:hover { background: var(--surface-elevated); color: var(--text); }
+    .curve-opt.is-selected {
+      background: rgba(29, 185, 84, 0.14);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .curve-opt span { font-size: 0.72rem; font-weight: 600; color: var(--text); }
+
+    .law-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .law-opt {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 0.74rem;
+      color: var(--muted);
+      justify-content: flex-start;
+      gap: 8px;
+    }
+    .law-opt:hover { background: var(--surface-elevated); color: var(--text); }
+    .law-opt.is-selected {
+      border-color: var(--accent);
+      background: rgba(29, 185, 84, 0.12);
+      color: var(--text);
+    }
+    .law-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 2px solid var(--muted);
+      flex-shrink: 0;
+    }
+    .law-opt.is-selected .law-dot {
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+
+    .adv-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding-top: 4px;
+    }
+
+    /* TRACK QUEUE (Spotify Playlist Rows) */
+    .queue-panel {
+      width: 100%;
+      max-width: 1240px;
+      margin-top: 10px;
+    }
+    .queue-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      font-size: 0.78rem;
+      letter-spacing: 0.03em;
+      color: var(--text);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .queue-form {
+      display: grid;
+      grid-template-columns: 1.5fr 2fr 112px auto;
+      gap: 6px;
+    }
+    @media (max-width: 768px) {
+      .queue-form { grid-template-columns: 1fr; }
+    }
+    .queue-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+    .queue-list::-webkit-scrollbar { width: 6px; }
+    .queue-list::-webkit-scrollbar-track { background: transparent; }
+    .queue-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); border-radius: 999px; }
+    .queue-list::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
+
+    .queue-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: transparent;
+      padding: 6px 10px;
+      border-radius: 6px;
+      gap: 10px;
+      font-size: 0.8rem;
+      border-top: 2px solid transparent;
+      transition: background 0.12s, opacity 0.15s, border-color 0.12s;
+    }
+    .queue-item:hover { background: var(--surface-elevated); }
+    .queue-item.is-next { background: rgba(29, 185, 84, 0.08); }
+    .queue-item.dragging { opacity: 0.4; }
+    .queue-item.drag-over { border-top-color: var(--accent); background: rgba(29, 185, 84, 0.08); }
+    .btn-next-idx {
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      padding: 2px 6px;
+      min-width: 28px;
+      border-radius: 999px;
+    }
+    .btn-next-idx:hover { background: var(--surface); color: var(--text); }
+    .queue-item.is-next .btn-next-idx {
+      background: rgba(29, 185, 84, 0.18);
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .drag-handle {
+      color: var(--subtle);
+      cursor: grab;
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .drag-handle:active { cursor: grabbing; }
+    .queue-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      overflow: hidden;
+      flex: 1;
+    }
+    .queue-thumb {
+      width: 38px;
+      height: 38px;
+      border-radius: 4px;
+      object-fit: cover;
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .queue-meta {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      gap: 2px;
+    }
+    .queue-title {
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .queue-sub {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+    .queue-id { font-family: var(--mono); }
+    .queue-cue-tag {
+      background: rgba(29, 185, 84, 0.14);
+      color: var(--accent);
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 0.66rem;
+      white-space: nowrap;
+    }
+    .queue-actions { display: flex; gap: 5px; flex-shrink: 0; }
+    .btn-load-a { color: #93c5fd; padding: 5px 10px; font-size: 0.72rem; background: rgba(59, 130, 246, 0.14); }
+    .btn-load-a:hover { background: rgba(59, 130, 246, 0.28); }
+    .btn-load-b { color: #fda4af; padding: 5px 10px; font-size: 0.72rem; background: rgba(244, 63, 94, 0.14); }
+    .btn-load-b:hover { background: rgba(244, 63, 94, 0.28); }
+    .btn-del { padding: 5px 6px; color: var(--muted); font-size: 0.72rem; background: transparent; }
+    .btn-del:hover { color: var(--warn); background: rgba(241, 94, 108, 0.14); }
+
+    /* Floating Help & Shortcut Popup */
+    .fab-help {
+      position: fixed;
+      bottom: 18px;
+      right: 18px;
+      z-index: 60;
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border-radius: 50%;
+      background: var(--surface-elevated);
+      color: var(--text);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+      border: 1px solid var(--border-strong);
+    }
+    .fab-help:hover, .fab-help.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+    .shortcut-popup {
+      position: fixed;
+      bottom: 68px;
+      right: 18px;
+      z-index: 60;
+      width: 320px;
+      max-width: calc(100vw - 36px);
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.75);
+      display: none;
+    }
+    .shortcut-popup.open { display: block; }
+    .shortcut-popup-title {
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--text);
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .shortcut-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 12px;
+      font-size: 0.74rem;
+      color: var(--muted);
+    }
+    .shortcut-grid div {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .shortcut-grid strong {
+      color: var(--text);
+      font-family: var(--mono);
+      background: var(--surface-elevated);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+    }
+
+    /* VINYL PLATTER */
+    @keyframes spinVinyl {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .platter-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-top: 2px;
+    }
+    .vinyl-wrap {
+      position: relative;
+      width: 68px;
+      height: 68px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .vinyl-disc {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at center, #0e0e0e 0%, #0e0e0e 44%, #1a1a1a 45%, #111111 65%, #1c1c1c 66%, #0d0d0d 100%);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: spinVinyl 2.8s linear infinite;
+      animation-play-state: paused;
+      position: relative;
+    }
+    .deck.is-playing .vinyl-disc {
+      animation-play-state: running;
+    }
+    .vinyl-label {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--surface-elevated);
+      background-size: cover;
+      background-position: center;
+      border: 2px solid #090909;
+      position: relative;
+    }
+    .vinyl-spindle {
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #000;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+    }
+    .vinyl-arm {
+      position: absolute;
+      top: 4px;
+      right: -2px;
+      width: 16px;
+      height: 30px;
+      pointer-events: none;
+      transform-origin: 12px 4px;
+      transform: rotate(-18deg);
+      transition: transform 0.35s ease;
+    }
+    .deck.is-playing .vinyl-arm {
+      transform: rotate(6deg);
+    }
+    .platter-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+      flex: 1;
+    }
+    .platter-status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .platter-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      font-family: var(--mono);
+      color: var(--muted);
+    }
+    .platter-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    .deck.is-playing .platter-badge {
+      color: var(--accent);
+    }
+    .deck.is-playing .platter-dot {
+      background: var(--accent);
+    }
+    .platter-sub {
+      font-size: 0.72rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="console">
+    <!-- DECK A -->
+    <div class="deck deck-a" id="deck-card-a">
+      <div class="deck-header">
+        <span>DECK A</span>
+        <div class="bpm-box">
+          <span class="bpm-badge" id="bpm-a">-- BPM</span>
+          <button class="btn-tap" onclick="tapBpm('A')">TAP</button>
+        </div>
+        <span id="vol-display-a" style="font-size:0.82rem;">Vol: 100%</span>
+      </div>
+      <div class="url-bar">
+        <input type="text" id="url-a" placeholder="วางลิงก์ YouTube / Shorts / Music หรือ Video ID">
+        <button onclick="loadTrack('A')">Load</button>
+      </div>
+      <div class="deck-title-bar" id="title-a" title="ชื่อคลิป">กำลังรอโหลดเพลง...</div>
+      <div class="video-stage">
+        <div class="side-vinyl" id="side-vinyl-a" title="คลิกเพื่อ Play/Pause หรือลากหมุนเพื่อสแครชเดินหน้า/ถอยหลัง">
+          <div class="scratch-hud" id="scratch-hud-a">0.0s</div>
+          <div class="side-vinyl-disc" id="side-vinyl-disc-a">
+            <div class="side-vinyl-label" id="side-vinyl-label-a" style="background-image:url('https://i.ytimg.com/vi/0UmE0QH-AA0/mqdefault.jpg')">
+              <div class="vinyl-spindle"></div>
+            </div>
+          </div>
+        </div>
+        <div class="video-wrapper">
+          <div id="player-a"></div>
+          <div class="video-lock-overlay" title="ล็อกวิดีโอไว้เพื่อกันคีย์ลัดหลุด (ปลดล็อกได้ที่ปุ่มใน Mixer)"></div>
+        </div>
+      </div>
+      <div class="seek-bar">
+        <span id="time-a">0:00</span>
+        <input type="range" id="seek-a" min="0" max="100" value="0" oninput="seekTrack('A', this.value)">
+        <span id="rem-a" class="rem-time">-0:00</span>
+      </div>
+
+      <!-- Main Cue -->
+      <div class="cue-setup">
+        <span style="color:var(--muted);">Main Cue:</span>
+        <input type="text" id="cue-input-a" placeholder="0:00" onkeydown="if(event.key==='Enter') { setCueFromInput('A'); this.blur(); }">
+        <button onclick="setCueFromInput('A')" style="padding: 3px 8px;">Set</button>
+        <button onclick="setCuePoint('A')" style="padding: 3px 7px;" title="ดึงเวลาปัจจุบัน">Now</button>
+        <span class="cue-badge" id="cue-status-a">CUE: 0:00</span>
+      </div>
+
+      <!-- Hot Cues 1-3 -->
+      <div class="hot-cues-row">
+        <div class="hot-cue-slot">
+          <button class="btn-hc-jump" id="hc-btn-A-1" onclick="jumpHotCue('A', 1)">C1: --:--</button>
+          <button class="btn-hc-set" onclick="setHotCue('A', 1)" title="บันทึกจุด C1 ณ เวลาปัจจุบัน">SET</button>
+          <button class="btn-hc-clear" onclick="clearHotCue('A', 1)" title="ล้างจุด C1"><span class="material-symbols-rounded" style="font-size:14px;">close</span></button>
+        </div>
+        <div class="hot-cue-slot">
+          <button class="btn-hc-jump" id="hc-btn-A-2" onclick="jumpHotCue('A', 2)">C2: --:--</button>
+          <button class="btn-hc-set" onclick="setHotCue('A', 2)" title="บันทึกจุด C2 ณ เวลาปัจจุบัน">SET</button>
+          <button class="btn-hc-clear" onclick="clearHotCue('A', 2)" title="ล้างจุด C2"><span class="material-symbols-rounded" style="font-size:14px;">close</span></button>
+        </div>
+        <div class="hot-cue-slot">
+          <button class="btn-hc-jump" id="hc-btn-A-3" onclick="jumpHotCue('A', 3)">C3: --:--</button>
+          <button class="btn-hc-set" onclick="setHotCue('A', 3)" title="บันทึกจุด C3 ณ เวลาปัจจุบัน">SET</button>
+          <button class="btn-hc-clear" onclick="clearHotCue('A', 3)" title="ล้างจุด C3"><span class="material-symbols-rounded" style="font-size:14px;">close</span></button>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <button class="btn-play" id="btn-play-a" onclick="togglePlay('A')" title="Play / Pause (คีย์ลัด A)"><span class="material-symbols-rounded">play_arrow</span></button>
+          <button class="btn-cue" id="btn-cue-a" onclick="triggerCue('A')">CUE <span class="kbd-hint">Q</span></button>
+        </div>
+        <div class="loop-group">
+          <button class="btn-loop" id="loop-A-4" onclick="toggleLoop('A', 4)">Loop 4s</button>
+          <button class="btn-loop" id="loop-A-8" onclick="toggleLoop('A', 8)">Loop 8s</button>
+        </div>
+        <div class="pitch-control">
+          <button class="btn-nudge" id="nudge-A-down" onmousedown="nudgeSpeed('A', 0.75, 'down')" onmouseup="nudgeSpeed('A', null)" onmouseleave="nudgeSpeed('A', null)" title="กดค้างเพื่อชะลอจังหวะชั่วคราว (คีย์ลัด Z)">-</button>
+          <input type="range" id="rate-a" class="pitch-slider" min="0.75" max="1.25" step="0.05" value="1" oninput="setSpeed('A', this.value)" title="ปรับความเร็ว (Pitch)">
+          <button class="btn-pitch-reset" id="rate-val-a" onclick="resetSpeed('A')" title="คลิกเพื่อรีเซ็ตเป็น 1.00x">1.00x</button>
+          <button class="btn-nudge" id="nudge-A-up" onmousedown="nudgeSpeed('A', 1.25, 'up')" onmouseup="nudgeSpeed('A', null)" onmouseleave="nudgeSpeed('A', null)" title="กดค้างเพื่อเร่งจังหวะชั่วคราว (คีย์ลัด X)">+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MASTER MIXER -->
+    <div class="mixer">
+      <div style="font-weight:700; color:var(--muted); font-size:0.74rem; letter-spacing:0.1em;">MASTER MIXER</div>
+      
+      <div class="knobs-row">
+        <div class="knob-unit">
+          <span style="color:var(--deck-a);">CH A</span>
+          <div class="knob-dial" id="knob-ch-a" title="ลากขึ้น-ลง หรือเลื่อนลูกกลิ้งเพื่อปรับเสียง CH A (ดับเบิลคลิก = 100%)">
+            <svg class="knob-svg" viewBox="0 0 60 60">
+              <path class="knob-track" d="M 13.03 46.97 A 24 24 0 1 1 46.97 46.97" />
+              <path class="knob-arc" id="knob-arc-ch-a" stroke="#3b82f6" d="M 13.03 46.97 A 24 24 0 1 1 46.97 46.97" />
+            </svg>
+            <div class="knob-cap" id="knob-cap-ch-a"></div>
+          </div>
+          <input type="hidden" id="ch-vol-a" value="100">
+          <span class="fader-val" id="ch-val-a">100%</span>
+        </div>
+
+        <div class="knob-unit master-ch">
+          <span>MASTER</span>
+          <div class="knob-dial" id="knob-master" title="ลากขึ้น-ลง หรือเลื่อนลูกกลิ้งเพื่อปรับ MASTER (ดับเบิลคลิก = 100%)">
+            <svg class="knob-svg" viewBox="0 0 60 60">
+              <path class="knob-track" d="M 13.03 46.97 A 24 24 0 1 1 46.97 46.97" />
+              <path class="knob-arc" id="knob-arc-master" stroke="#1db954" d="M 13.03 46.97 A 24 24 0 1 1 46.97 46.97" />
+            </svg>
+            <div class="knob-cap" id="knob-cap-master"></div>
+          </div>
+          <input type="hidden" id="master-vol" value="100">
+          <span class="fader-val" id="master-val">100%</span>
+        </div>
+
+        <div class="knob-unit">
+          <span style="color:var(--deck-b);">CH B</span>
+          <div class="knob-dial" id="knob-ch-b" title="ลากขึ้น-ลง หรือเลื่อนลูกกลิ้งเพื่อปรับเสียง CH B (ดับเบิลคลิก = 100%)">
+            <svg class="knob-svg" viewBox="0 0 60 60">
+              <path class="knob-track" d="M 13.03 46.97 A 24 24 0 1 1 46.97 46.97" />
+              <path class="knob-arc" id="knob-arc-ch-b" stroke="#f43f5e" d="M 13.03 46.97 A 24 24 0 1 1 46.97 46.97" />
+            </svg>
+            <div class="knob-cap" id="knob-cap-ch-b"></div>
+          </div>
+          <input type="hidden" id="ch-vol-b" value="100">
+          <span class="fader-val" id="ch-val-b">100%</span>
+        </div>
+      </div>
+
+      <!-- 2x2 Illuminated Hardware Pads -->
+      <div class="pad-grid">
+        <button class="dj-pad pad-talk" id="btn-talk" onclick="toggleTalkDuck()" title="ลดเสียงเพลงชั่วคราวเวลาพูด (คีย์ลัด T)">
+          <span class="pad-led"></span>
+          <span class="material-symbols-rounded pad-icon">mic</span>
+          <span class="pad-label">TALK (T)</span>
+        </button>
+        <button class="dj-pad" id="btn-lock-video" onclick="toggleVideoLock()" title="ล็อกกรอบวิดีโอเพื่อกันคีย์ลัดหลุด">
+          <span class="pad-led"></span>
+          <span class="material-symbols-rounded pad-icon" id="lock-pad-icon">lock_open</span>
+          <span class="pad-label" id="lock-pad-label">LOCK</span>
+        </button>
+        <button class="dj-pad" id="pad-auto-next" onclick="toggleAutoPad('auto-next-toggle', 'pad-auto-next')" title="เหลือ 10 วินาที สลับฝั่งให้อัตโนมัติ">
+          <span class="pad-led"></span>
+          <span class="material-symbols-rounded pad-icon">fast_forward</span>
+          <span class="pad-label">AUTO-NEXT</span>
+          <input type="checkbox" id="auto-next-toggle" style="display:none;">
+        </button>
+        <button class="dj-pad is-on" id="pad-auto-load" onclick="toggleAutoPad('auto-load-toggle', 'pad-auto-load')" title="ดึงเพลงถัดไปจากคิวมาโหลดรอให้อัตโนมัติ">
+          <span class="pad-led"></span>
+          <span class="material-symbols-rounded pad-icon">queue_music</span>
+          <span class="pad-label">AUTO-LOAD</span>
+          <input type="checkbox" id="auto-load-toggle" checked style="display:none;">
+        </button>
+      </div>
+
+      <div class="auto-fade-box">
+        <div class="auto-fade-header">
+          <span>FADER</span>
+          <div class="seg-switch" role="group" aria-label="Fade duration">
+            <button class="seg-btn" id="fade-dur-2000" onclick="setFadeDuration(2000)"><span class="seg-dot"></span>2s</button>
+            <button class="seg-btn is-active" id="fade-dur-4000" onclick="setFadeDuration(4000)"><span class="seg-dot"></span>4s</button>
+            <button class="seg-btn" id="fade-dur-6000" onclick="setFadeDuration(6000)"><span class="seg-dot"></span>6s</button>
+            <button class="seg-btn" id="btn-fade-adv" onclick="openFadeModal()" title="ตั้งค่า Fade แบบละเอียด (แยกเวลา A/B, Curve, Auto-Next)"><span class="seg-dot"></span>ADV</button>
+          </div>
+          <input type="hidden" id="fade-duration" value="4000">
+        </div>
+        <div class="fade-btns">
+          <button class="btn-fade-a" onclick="startAutoFade(-100)" title="Fade ไปฝั่ง A (คีย์ลัด [)">
+            <span class="material-symbols-rounded fade-tri">play_arrow</span>
+            <span class="fade-cap-label">FADE A <span class="kbd-hint">[</span></span>
+          </button>
+          <button class="btn-fade-b" onclick="startAutoFade(100)" title="Fade ไปฝั่ง B (คีย์ลัด ])">
+            <span class="material-symbols-rounded fade-tri">play_arrow</span>
+            <span class="fade-cap-label">FADE B <span class="kbd-hint">]</span></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="crossfader-box">
+        <div class="cf-labels">
+          <span style="color:var(--deck-a)">A</span>
+          <span>CROSSFADER</span>
+          <span style="color:var(--deck-b)">B</span>
+        </div>
+        <div class="cf-slot">
+          <div class="cf-ticks"><span></span><span></span><span></span><span></span><span></span></div>
+          <input type="range" id="crossfader" min="-100" max="100" value="-100" oninput="cancelAutoFade(); updateVolumes()">
+        </div>
+        <button onclick="cancelAutoFade(); resetCrossfader()" style="width:100%; font-size:0.72rem; padding:6px;">Center (0) <span class="kbd-hint">C</span></button>
+      </div>
+    </div>
+
+    <!-- DECK B -->
+    <div class="deck deck-b" id="deck-card-b">
+      <div class="deck-header">
+        <span>DECK B</span>
+        <div class="bpm-box">
+          <span class="bpm-badge" id="bpm-b">-- BPM</span>
+          <button class="btn-tap" onclick="tapBpm('B')">TAP</button>
+        </div>
+        <span id="vol-display-b" style="font-size:0.82rem;">Vol: 100%</span>
+      </div>
+      <div class="url-bar">
+        <input type="text" id="url-b" placeholder="วางลิงก์ YouTube / Shorts / Music หรือ Video ID">
+        <button onclick="loadTrack('B')">Load</button>
+      </div>
+      <div class="deck-title-bar" id="title-b" title="ชื่อคลิป">กำลังรอโหลดเพลง...</div>
+      <div class="video-stage">
+        <div class="side-vinyl" id="side-vinyl-b" title="คลิกเพื่อ Play/Pause หรือลากหมุนเพื่อสแครชเดินหน้า/ถอยหลัง">
+          <div class="scratch-hud" id="scratch-hud-b">0.0s</div>
+          <div class="side-vinyl-disc" id="side-vinyl-disc-b">
+            <div class="side-vinyl-label" id="side-vinyl-label-b" style="background-image:url('https://i.ytimg.com/vi/fxViBvmTM_o/mqdefault.jpg')">
+              <div class="vinyl-spindle"></div>
+            </div>
+          </div>
+        </div>
+        <div class="video-wrapper">
+          <div id="player-b"></div>
+          <div class="video-lock-overlay" title="ล็อกวิดีโอไว้เพื่อกันคีย์ลัดหลุด (ปลดล็อกได้ที่ปุ่มใน Mixer)"></div>
+        </div>
+      </div>
+      <div class="seek-bar">
+        <span id="time-b">0:00</span>
+        <input type="range" id="seek-b" min="0" max="100" value="0" oninput="seekTrack('B', this.value)">
+        <span id="rem-b" class="rem-time">-0:00</span>
+      </div>
+
+      <!-- Main Cue -->
+      <div class="cue-setup">
+        <span style="color:var(--muted);">Main Cue:</span>
+        <input type="text" id="cue-input-b" placeholder="0:00" onkeydown="if(event.key==='Enter') { setCueFromInput('B'); this.blur(); }">
+        <button onclick="setCueFromInput('B')" style="padding: 3px 8px;">Set</button>
+        <button onclick="setCuePoint('B')" style="padding: 3px 7px;" title="ดึงเวลาปัจจุบัน">Now</button>
+        <span class="cue-badge" id="cue-status-b">CUE: 0:00</span>
+      </div>
+
+      <!-- Hot Cues 1-3 -->
+      <div class="hot-cues-row">
+        <div class="hot-cue-slot">
+          <button class="btn-hc-jump" id="hc-btn-B-1" onclick="jumpHotCue('B', 1)">C1: --:--</button>
+          <button class="btn-hc-set" onclick="setHotCue('B', 1)" title="บันทึกจุด C1 ณ เวลาปัจจุบัน">SET</button>
+          <button class="btn-hc-clear" onclick="clearHotCue('B', 1)" title="ล้างจุด C1"><span class="material-symbols-rounded" style="font-size:14px;">close</span></button>
+        </div>
+        <div class="hot-cue-slot">
+          <button class="btn-hc-jump" id="hc-btn-B-2" onclick="jumpHotCue('B', 2)">C2: --:--</button>
+          <button class="btn-hc-set" onclick="setHotCue('B', 2)" title="บันทึกจุด C2 ณ เวลาปัจจุบัน">SET</button>
+          <button class="btn-hc-clear" onclick="clearHotCue('B', 2)" title="ล้างจุด C2"><span class="material-symbols-rounded" style="font-size:14px;">close</span></button>
+        </div>
+        <div class="hot-cue-slot">
+          <button class="btn-hc-jump" id="hc-btn-B-3" onclick="jumpHotCue('B', 3)">C3: --:--</button>
+          <button class="btn-hc-set" onclick="setHotCue('B', 3)" title="บันทึกจุด C3 ณ เวลาปัจจุบัน">SET</button>
+          <button class="btn-hc-clear" onclick="clearHotCue('B', 3)" title="ล้างจุด C3"><span class="material-symbols-rounded" style="font-size:14px;">close</span></button>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <button class="btn-play" id="btn-play-b" onclick="togglePlay('B')" title="Play / Pause (คีย์ลัด L)"><span class="material-symbols-rounded">play_arrow</span></button>
+          <button class="btn-cue" id="btn-cue-b" onclick="triggerCue('B')">CUE <span class="kbd-hint">P</span></button>
+        </div>
+        <div class="loop-group">
+          <button class="btn-loop" id="loop-B-4" onclick="toggleLoop('B', 4)">Loop 4s</button>
+          <button class="btn-loop" id="loop-B-8" onclick="toggleLoop('B', 8)">Loop 8s</button>
+        </div>
+        <div class="pitch-control">
+          <button class="btn-nudge" id="nudge-B-down" onmousedown="nudgeSpeed('B', 0.75, 'down')" onmouseup="nudgeSpeed('B', null)" onmouseleave="nudgeSpeed('B', null)" title="กดค้างเพื่อชะลอจังหวะชั่วคราว (คีย์ลัด N)">-</button>
+          <input type="range" id="rate-b" class="pitch-slider" min="0.75" max="1.25" step="0.05" value="1" oninput="setSpeed('B', this.value)" title="ปรับความเร็ว (Pitch)">
+          <button class="btn-pitch-reset" id="rate-val-b" onclick="resetSpeed('B')" title="คลิกเพื่อรีเซ็ตเป็น 1.00x">1.00x</button>
+          <button class="btn-nudge" id="nudge-B-up" onmousedown="nudgeSpeed('B', 1.25, 'up')" onmouseup="nudgeSpeed('B', null)" onmouseleave="nudgeSpeed('B', null)" title="กดค้างเพื่อเร่งจังหวะชั่วคราว (คีย์ลัด M)">+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRACK QUEUE -->
+  <div class="queue-panel">
+    <div class="queue-header">
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span class="material-symbols-rounded">queue_music</span> TRACK QUEUE</span>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button onclick="saveDeckToQueue('A')" style="font-size:0.74rem; padding:4px 8px; color:#93c5fd;"><span class="material-symbols-rounded">playlist_add</span> Deck A</button>
+        <button onclick="saveDeckToQueue('B')" style="font-size:0.74rem; padding:4px 8px; color:#fda4af;"><span class="material-symbols-rounded">playlist_add</span> Deck B</button>
+        <button onclick="exportQueue()" style="font-size:0.74rem; padding:4px 8px;"><span class="material-symbols-rounded">download</span> Export</button>
+        <button onclick="document.getElementById('import-queue-file').click()" style="font-size:0.74rem; padding:4px 8px;"><span class="material-symbols-rounded">upload_file</span> Import</button>
+        <input type="file" id="import-queue-file" accept=".json" style="display:none;" onchange="importQueue(event)">
+        <button onclick="clearQueue()" style="font-size:0.74rem; padding:4px 8px; color:var(--muted);"><span class="material-symbols-rounded">delete_sweep</span> Clear</button>
+      </div>
+    </div>
+    
+    <div class="queue-form">
+      <input type="text" id="q-title" placeholder="ชื่อเพลง / โน้ตสั้นๆ">
+      <input type="text" id="q-url" placeholder="วางลิงก์ YouTube / YouTube Music" onkeydown="if(event.key==='Enter') addToQueue()">
+      <input type="text" id="q-cue" placeholder="Cue (0:45)" style="font-family:monospace; text-align:center;" onkeydown="if(event.key==='Enter') addToQueue()">
+      <button onclick="addToQueue()" style="background:var(--accent); border:none; color:#000; font-weight:700;">+ เพิ่มเข้าคิว</button>
+    </div>
+
+    <div class="queue-list" id="queue-list"></div>
+  </div>
+
+  <!-- Floating Help & Shortcut Popup -->
+  <button class="fab-help" id="fab-help" onclick="toggleShortcutPopup(event)" title="Keyboard Shortcuts">
+    <span class="material-symbols-rounded" style="font-size:20px;">question_mark</span>
+  </button>
+  <div class="shortcut-popup" id="shortcut-popup">
+    <div class="shortcut-popup-title">
+      <span>KEYBOARD SHORTCUTS</span>
+      <button class="btn-del" onclick="toggleShortcutPopup(event)" title="ปิด"><span class="material-symbols-rounded" style="font-size:16px;">close</span></button>
+    </div>
+    <div class="shortcut-grid">
+      <div><strong>Q</strong> CUE A</div>
+      <div><strong>P</strong> CUE B</div>
+      <div><strong>A</strong> Play A</div>
+      <div><strong>L</strong> Play B</div>
+      <div><strong>1 / 2 / 3</strong> Hot Cue A</div>
+      <div><strong>8 / 9 / 0</strong> Hot Cue B</div>
+      <div><strong>Z / X</strong> Nudge A</div>
+      <div><strong>N / M</strong> Nudge B</div>
+      <div><strong>[ / ]</strong> Fade A / B</div>
+      <div><strong>C</strong> Center CF</div>
+      <div><strong>T</strong> Talk / Duck</div>
+      <div><strong>↑ / ↓</strong> Master Vol</div>
+      <div><strong>← / →</strong> Crossfader</div>
+    </div>
+  </div>
+
+  <!-- Advanced Fade Settings Modal -->
+  <div class="modal-backdrop" id="fade-adv-modal" onclick="if(event.target===this) closeFadeModal()">
+    <div class="adv-modal" role="dialog" aria-label="Fader Advanced Settings">
+      <div class="adv-modal-header">
+        <span style="display:inline-flex; align-items:center; gap:6px;"><span class="material-symbols-rounded" style="color:var(--accent);">tune</span> CROSSFADE CURVE &amp; TIMING</span>
+        <button class="btn-del" onclick="closeFadeModal()" title="ปิด"><span class="material-symbols-rounded" style="font-size:18px;">close</span></button>
+      </div>
+
+      <!-- Live Crossfade Graph Preview -->
+      <div class="cf-graph-box">
+        <svg class="cf-graph-svg" id="cf-graph-svg" viewBox="0 0 320 92" preserveAspectRatio="none">
+          <line x1="160" y1="0" x2="160" y2="92" stroke="rgba(255,255,255,0.08)" stroke-dasharray="3 3"/>
+          <line x1="0" y1="46" x2="320" y2="46" stroke="rgba(255,255,255,0.06)"/>
+          <path id="cf-fill-a" fill="rgba(59,130,246,0.12)" stroke="none"/>
+          <path id="cf-fill-b" fill="rgba(244,63,94,0.12)" stroke="none"/>
+          <path id="cf-line-a" fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round"/>
+          <path id="cf-line-b" fill="none" stroke="#f43f5e" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+        <div class="cf-graph-legend">
+          <span style="color:#93c5fd;">Deck A Out</span>
+          <span id="cf-graph-desc" style="color:var(--muted);">Smooth · Equal Power</span>
+          <span style="color:#fda4af;">Deck B In</span>
+        </div>
+      </div>
+
+      <div class="adv-field">
+        <span>รูปแบบกราฟ (Fade Curve)</span>
+        <div class="curve-grid">
+          <button class="curve-opt is-selected" data-curve="smooth" onclick="selectFadeCurve('smooth')" title="Smooth S-Curve">
+            <svg viewBox="0 0 28 22"><path d="M2 19 C11 19, 17 3, 26 3"/></svg>
+            <span>Smooth</span>
+          </button>
+          <button class="curve-opt" data-curve="linear" onclick="selectFadeCurve('linear')" title="Linear">
+            <svg viewBox="0 0 28 22"><path d="M2 19 L26 3"/></svg>
+            <span>Linear</span>
+          </button>
+          <button class="curve-opt" data-curve="fast" onclick="selectFadeCurve('fast')" title="Fast In">
+            <svg viewBox="0 0 28 22"><path d="M2 19 Q4 3, 26 3"/></svg>
+            <span>Fast In</span>
+          </button>
+          <button class="curve-opt" data-curve="slow" onclick="selectFadeCurve('slow')" title="Slow Tail">
+            <svg viewBox="0 0 28 22"><path d="M2 19 Q24 19, 26 3"/></svg>
+            <span>Slow</span>
+          </button>
+          <button class="curve-opt" data-curve="cut" onclick="selectFadeCurve('cut')" title="Hard Cut (0ms)">
+            <svg viewBox="0 0 28 22"><path d="M2 19 L14 19 L14 3 L26 3"/></svg>
+            <span>Cut</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="adv-field">
+        <span>Crossfade Law</span>
+        <div class="law-row">
+          <button class="law-opt is-selected" data-law="power" onclick="selectFadeLaw('power')">
+            <span class="law-dot"></span>Equal Power
+          </button>
+          <button class="law-opt" data-law="linear" onclick="selectFadeLaw('linear')">
+            <span class="law-dot"></span>Equal Gain
+          </button>
+        </div>
+      </div>
+
+      <div class="adv-row-3">
+        <label class="adv-field">
+          <span style="color:#93c5fd;">Fade → A (s)</span>
+          <input type="number" id="adv-fade-a" min="0" max="30" step="0.5" value="4">
+        </label>
+        <label class="adv-field">
+          <span style="color:#fda4af;">Fade → B (s)</span>
+          <input type="number" id="adv-fade-b" min="0" max="30" step="0.5" value="4">
+        </label>
+        <label class="adv-field">
+          <span>Auto-Next (s)</span>
+          <input type="number" id="adv-auto-next-sec" min="2" max="45" step="1" value="10">
+        </label>
+      </div>
+
+      <div class="adv-actions">
+        <button onclick="resetFadeSettings()" style="background:transparent; color:var(--muted);">รีเซ็ตค่าเริ่มต้น</button>
+        <button onclick="applyFadeSettings()" style="background:var(--accent); color:#000; font-weight:700; padding:8px 18px;">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script>
+    const players = { A: null, B: null };
+    const cuePoints = { A: 0, B: 0 };
+    const hotCues = { A: { 1: null, 2: null, 3: null }, B: { 1: null, 2: null, 3: null } };
+    const loopState = {
+      A: { active: false, start: 0, length: 0 },
+      B: { active: false, start: 0, length: 0 }
+    };
+    const tapTimes = { A: [], B: [] };
+
+    let fadeAnimationId = null;
+    let duckAnimationId = null;
+    let isDucking = false;
+    let preDuckMasterVol = 100;
+    let autoNextTriggered = false;
+    let isVideoLocked = false;
+
+    function safeStorageGet(key, fallback) {
+      try {
+        const val = localStorage.getItem(key);
+        return val !== null ? JSON.parse(val) : fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    function safeStorageSet(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (e) {
+        // Ignore storage errors in sandboxed iframes / strict privacy browsers
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    let trackQueue = safeStorageGet('yt_dj_queue', []);
+    let queueCursor = safeStorageGet('yt_dj_queue_cursor', 0);
+    if (!Number.isInteger(queueCursor) || queueCursor < 0 || queueCursor >= trackQueue.length) {
+      queueCursor = 0;
+    }
+
+    function onYouTubeIframeAPIReady() {
+      players.A = new YT.Player('player-a', {
+        videoId: '0UmE0QH-AA0',
+        playerVars: { controls: 0, disablekb: 1, rel: 0 },
+        events: { onReady: () => updateVolumes() }
+      });
+
+      players.B = new YT.Player('player-b', {
+        videoId: 'fxViBvmTM_o',
+        playerVars: { controls: 0, disablekb: 1, rel: 0 },
+        events: { onReady: () => updateVolumes() }
+      });
+
+      setInterval(tickEngine, 200);
+      renderQueue();
+    }
+
+    function setupVinylScratch(deck) {
+      const wrap = document.getElementById(`side-vinyl-${deck.toLowerCase()}`);
+      const disc = document.getElementById(`side-vinyl-disc-${deck.toLowerCase()}`);
+      const hud = document.getElementById(`scratch-hud-${deck.toLowerCase()}`);
+      if (!wrap || !disc || !hud) return;
+
+      let dragging = false;
+      let moved = false;
+      let startX = 0, startY = 0;
+      let lastAngle = 0;
+      let visualDeg = 0;
+      let baseTime = 0;
+      let totalDeltaSec = 0;
+      let lastSeekAt = 0;
+
+      function getAngle(clientX, clientY) {
+        const rect = wrap.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        return Math.atan2(clientY - cy, clientX - cx) * (180 / Math.PI);
+      }
+
+      wrap.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        dragging = true;
+        moved = false;
+        startX = e.clientX;
+        startY = e.clientY;
+        lastAngle = getAngle(e.clientX, e.clientY);
+        totalDeltaSec = 0;
+        const p = players[deck];
+        baseTime = (p && p.getCurrentTime) ? p.getCurrentTime() : 0;
+        wrap.setPointerCapture(e.pointerId);
+      });
+
+      wrap.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+        if (!moved && dist > 5) {
+          moved = true;
+          wrap.classList.add('is-scratching');
+        }
+        if (!moved) return;
+
+        const angle = getAngle(e.clientX, e.clientY);
+        let deltaAngle = angle - lastAngle;
+        if (deltaAngle > 180) deltaAngle -= 360;
+        if (deltaAngle < -180) deltaAngle += 360;
+        lastAngle = angle;
+
+        visualDeg += deltaAngle;
+        disc.style.transform = `rotate(${visualDeg.toFixed(1)}deg)`;
+
+        // 360 deg = 10 seconds scrub
+        totalDeltaSec += (deltaAngle / 360) * 10;
+        const p = players[deck];
+        const dur = (p && p.getDuration) ? p.getDuration() : 0;
+        const target = Math.max(0, dur > 0 ? Math.min(dur, baseTime + totalDeltaSec) : baseTime + totalDeltaSec);
+        const sign = totalDeltaSec >= 0 ? '+' : '';
+        hud.innerText = `${sign}${totalDeltaSec.toFixed(1)}s (${formatTime(target)})`;
+
+        const now = performance.now();
+        if (p && p.seekTo && now - lastSeekAt > 90) {
+          lastSeekAt = now;
+          clearLoop(deck);
+          p.seekTo(target, true);
+        }
+      });
+
+      function endDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        if (wrap.hasPointerCapture(e.pointerId)) {
+          wrap.releasePointerCapture(e.pointerId);
+        }
+        wrap.classList.remove('is-scratching');
+        disc.style.transform = '';
+
+        if (!moved) {
+          togglePlay(deck);
+          return;
+        }
+        const p = players[deck];
+        if (p && p.seekTo) {
+          const dur = p.getDuration ? p.getDuration() : 0;
+          const target = Math.max(0, dur > 0 ? Math.min(dur, baseTime + totalDeltaSec) : baseTime + totalDeltaSec);
+          clearLoop(deck);
+          p.seekTo(target, true);
+        }
+      }
+
+      wrap.addEventListener('pointerup', endDrag);
+      wrap.addEventListener('pointercancel', endDrag);
+    }
+
+    function extractVideoId(input) {
+      const trimmed = String(input || '').trim();
+      const regExp = /(?:youtube\.com\/(?:shorts\/|live\/|embed\/|v\/|watch\?.*?v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+      const match = trimmed.match(regExp);
+      if (match) return match[1];
+      if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+      return trimmed;
+    }
+
+    function updateHotCueUI(deck, slot) {
+      const btn = document.getElementById(`hc-btn-${deck}-${slot}`);
+      if (!btn) return;
+      const val = hotCues[deck][slot];
+      if (val !== null && val !== undefined) {
+        btn.innerText = `C${slot}: ${formatTime(val)}`;
+        btn.classList.add('has-point');
+      } else {
+        btn.innerText = `C${slot}: --:--`;
+        btn.classList.remove('has-point');
+      }
+    }
+
+    function loadTrack(deck, customUrl = null, customCue = null, customHotCues = null) {
+      const urlInput = document.getElementById(`url-${deck.toLowerCase()}`);
+      if (customUrl !== null) {
+        urlInput.value = customUrl;
+      }
+      const videoId = extractVideoId(urlInput.value);
+      
+      if (videoId && players[deck] && players[deck].cueVideoById) {
+        const seconds = customCue !== null ? parseTimeInput(customCue) : 0;
+        cuePoints[deck] = seconds;
+        
+        [1, 2, 3].forEach(slot => {
+          const hcVal = customHotCues && customHotCues[slot] !== undefined ? customHotCues[slot] : null;
+          hotCues[deck][slot] = hcVal;
+          updateHotCueUI(deck, slot);
+        });
+
+        clearLoop(deck);
+        tapTimes[deck] = [];
+        document.getElementById(`bpm-${deck.toLowerCase()}`).innerText = '-- BPM';
+        document.getElementById(`title-${deck.toLowerCase()}`).innerText = `กำลังโหลด [${videoId}]...`;
+        autoNextTriggered = false;
+
+        document.getElementById(`cue-input-${deck.toLowerCase()}`).value = seconds > 0 ? formatTime(seconds) : '';
+        document.getElementById(`cue-status-${deck.toLowerCase()}`).innerText = `CUE: ${formatTime(seconds)}`;
+        
+        players[deck].cueVideoById(videoId, seconds);
+      }
+    }
+
+    // --- Hot Cues (C1, C2, C3) ---
+    function setHotCue(deck, slot) {
+      const p = players[deck];
+      if (p && p.getCurrentTime) {
+        const cur = p.getCurrentTime();
+        hotCues[deck][slot] = cur;
+        updateHotCueUI(deck, slot);
+      }
+    }
+
+    function clearHotCue(deck, slot) {
+      hotCues[deck][slot] = null;
+      updateHotCueUI(deck, slot);
+    }
+
+    function jumpHotCue(deck, slot) {
+      const target = hotCues[deck][slot];
+      const p = players[deck];
+      if (target !== null && p && p.seekTo) {
+        clearLoop(deck);
+        if (p.unMute) p.unMute();
+        updateVolumes();
+        p.seekTo(target, true);
+        p.playVideo();
+      } else {
+        setHotCue(deck, slot);
+      }
+    }
+
+    // --- Nudge Speed ---
+    function nudgeSpeed(deck, tempRate, dir = null) {
+      const p = players[deck];
+      if (!p || !p.setPlaybackRate) return;
+      
+      const btnDown = document.getElementById(`nudge-${deck}-down`);
+      const btnUp = document.getElementById(`nudge-${deck}-up`);
+
+      if (tempRate !== null) {
+        p.setPlaybackRate(tempRate);
+        if (dir === 'down' && btnDown) btnDown.classList.add('nudging');
+        if (dir === 'up' && btnUp) btnUp.classList.add('nudging');
+      } else {
+        const baseRate = parseFloat(document.getElementById(`rate-${deck.toLowerCase()}`).value);
+        p.setPlaybackRate(baseRate);
+        if (btnDown) btnDown.classList.remove('nudging');
+        if (btnUp) btnUp.classList.remove('nudging');
+      }
+    }
+
+    // --- Tap Tempo ---
+    function tapBpm(deck) {
+      const now = performance.now();
+      const history = tapTimes[deck];
+      if (history.length > 0 && (now - history[history.length - 1]) > 2500) {
+        tapTimes[deck] = [];
+      }
+      tapTimes[deck].push(now);
+      if (tapTimes[deck].length > 8) tapTimes[deck].shift();
+
+      if (tapTimes[deck].length >= 2) {
+        let totalInterval = 0;
+        for (let i = 1; i < tapTimes[deck].length; i++) {
+          totalInterval += (tapTimes[deck][i] - tapTimes[deck][i - 1]);
+        }
+        const avgInterval = totalInterval / (tapTimes[deck].length - 1);
+        const bpm = Math.round(60000 / avgInterval);
+        document.getElementById(`bpm-${deck.toLowerCase()}`).innerText = `${bpm} BPM`;
+      }
+    }
+
+    // --- Loop ---
+    function toggleLoop(deck, lengthSec) {
+      const state = loopState[deck];
+      const p = players[deck];
+      if (!p || !p.getCurrentTime) return;
+
+      if (state.active && state.length === lengthSec) {
+        clearLoop(deck);
+      } else {
+        clearLoop(deck);
+        state.active = true;
+        state.start = p.getCurrentTime();
+        state.length = lengthSec;
+        document.getElementById(`loop-${deck}-${lengthSec}`).classList.add('active');
+      }
+    }
+
+    function clearLoop(deck) {
+      loopState[deck].active = false;
+      [4, 8].forEach(len => {
+        const el = document.getElementById(`loop-${deck}-${len}`);
+        if (el) el.classList.remove('active');
+      });
+    }
+
+    // --- Rotary Knobs & Master Volume / Auto-Ducking ---
+    const KNOB_ARC_LEN = 113.1; // 270 deg of r=24
+
+    function renderKnobVisual(capId, arcId, val) {
+      const pct = Math.max(0, Math.min(100, val)) / 100;
+      const deg = -135 + pct * 270;
+      const cap = document.getElementById(capId);
+      const arc = document.getElementById(arcId);
+      if (cap) cap.style.transform = `rotate(${deg.toFixed(1)}deg)`;
+      if (arc) {
+        arc.style.strokeDasharray = `${KNOB_ARC_LEN}`;
+        arc.style.strokeDashoffset = `${(KNOB_ARC_LEN * (1 - pct)).toFixed(2)}`;
+      }
+    }
+
+    function setupKnob(dialId, inputId, isMaster = false) {
+      const dial = document.getElementById(dialId);
+      const input = document.getElementById(inputId);
+      if (!dial || !input) return;
+
+      let dragging = false;
+      let startY = 0;
+      let startVal = 100;
+
+      function applyVal(nextVal) {
+        input.value = Math.round(Math.max(0, Math.min(100, nextVal)));
+        if (isMaster) manualMasterChange();
+        else updateVolumes();
+      }
+
+      dial.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        dragging = true;
+        startY = e.clientY;
+        startVal = parseFloat(input.value) || 0;
+        dial.setPointerCapture(e.pointerId);
+      });
+
+      dial.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const delta = (startY - e.clientY) * 0.8;
+        applyVal(startVal + delta);
+      });
+
+      function stopDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        if (dial.hasPointerCapture(e.pointerId)) dial.releasePointerCapture(e.pointerId);
+      }
+      dial.addEventListener('pointerup', stopDrag);
+      dial.addEventListener('pointercancel', stopDrag);
+
+      dial.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const cur = parseFloat(input.value) || 0;
+        applyVal(cur + (e.deltaY < 0 ? 4 : -4));
+      }, { passive: false });
+
+      dial.addEventListener('dblclick', () => applyVal(100));
+    }
+
+    function updateVolumes() {
+      const cf = parseFloat(document.getElementById('crossfader').value);
+      const chA = parseFloat(document.getElementById('ch-vol-a').value);
+      const chB = parseFloat(document.getElementById('ch-vol-b').value);
+      const master = parseFloat(document.getElementById('master-vol').value);
+
+      document.getElementById('ch-val-a').innerText = `${Math.round(chA)}%`;
+      document.getElementById('ch-val-b').innerText = `${Math.round(chB)}%`;
+      document.getElementById('master-val').innerText = `${Math.round(master)}%`;
+
+      renderKnobVisual('knob-cap-ch-a', 'knob-arc-ch-a', chA);
+      renderKnobVisual('knob-cap-master', 'knob-arc-master', master);
+      renderKnobVisual('knob-cap-ch-b', 'knob-arc-ch-b', chB);
+
+      const normalized = (cf + 100) / 200;
+      const isLinearLaw = fadeSettings && fadeSettings.law === 'linear';
+      const gainA = isLinearLaw ? (1 - normalized) : Math.cos(normalized * 0.5 * Math.PI);
+      const gainB = isLinearLaw ? normalized : Math.sin(normalized * 0.5 * Math.PI);
+
+      const masterScale = master / 100;
+      const finalVolA = Math.round(chA * gainA * masterScale);
+      const finalVolB = Math.round(chB * gainB * masterScale);
+
+      if (players.A && players.A.setVolume) players.A.setVolume(finalVolA);
+      if (players.B && players.B.setVolume) players.B.setVolume(finalVolB);
+
+      document.getElementById('vol-display-a').innerText = `Vol: ${finalVolA}%`;
+      document.getElementById('vol-display-b').innerText = `Vol: ${finalVolB}%`;
+    }
+
+    function manualMasterChange() {
+      if (duckAnimationId !== null) {
+        cancelAnimationFrame(duckAnimationId);
+        duckAnimationId = null;
+      }
+      isDucking = false;
+      document.getElementById('btn-talk').classList.remove('is-on');
+      updateVolumes();
+    }
+
+    function toggleTalkDuck() {
+      const masterSlider = document.getElementById('master-vol');
+      const btn = document.getElementById('btn-talk');
+      
+      if (duckAnimationId !== null) {
+        cancelAnimationFrame(duckAnimationId);
+        duckAnimationId = null;
+      }
+
+      if (!isDucking) {
+        preDuckMasterVol = parseFloat(masterSlider.value);
+        const target = Math.min(preDuckMasterVol, 25);
+        isDucking = true;
+        btn.classList.add('is-on');
+        animateMasterTo(target, 350);
+      } else {
+        isDucking = false;
+        btn.classList.remove('is-on');
+        animateMasterTo(preDuckMasterVol, 500);
+      }
+    }
+
+    function animateMasterTo(targetVol, duration) {
+      const slider = document.getElementById('master-vol');
+      const startVol = parseFloat(slider.value);
+      const startTime = performance.now();
+
+      function step(now) {
+        const progress = Math.min((now - startTime) / duration, 1);
+        slider.value = startVol + (targetVol - startVol) * progress;
+        updateVolumes();
+        if (progress < 1) {
+          duckAnimationId = requestAnimationFrame(step);
+        } else {
+          duckAnimationId = null;
+        }
+      }
+      duckAnimationId = requestAnimationFrame(step);
+    }
+
+    // --- Video Focus Lock & Illuminated Pads ---
+    function toggleVideoLock() {
+      isVideoLocked = !isVideoLocked;
+      document.body.classList.toggle('video-locked', isVideoLocked);
+      const btn = document.getElementById('btn-lock-video');
+      const icon = document.getElementById('lock-pad-icon');
+      const label = document.getElementById('lock-pad-label');
+      btn.classList.toggle('is-on', isVideoLocked);
+      if (icon) icon.innerText = isVideoLocked ? 'lock' : 'lock_open';
+      if (label) label.innerText = isVideoLocked ? 'LOCKED' : 'LOCK';
+    }
+
+    function toggleAutoPad(checkboxId, padId) {
+      const cb = document.getElementById(checkboxId);
+      const pad = document.getElementById(padId);
+      if (!cb || !pad) return;
+      cb.checked = !cb.checked;
+      pad.classList.toggle('is-on', cb.checked);
+    }
+
+    let fadeSettings = safeStorageGet('yt_dj_fade_settings', {
+      timeA: 4,
+      timeB: 4,
+      curve: 'smooth',
+      law: 'power',
+      autoNextSec: 10,
+      advActive: false
+    });
+    if (!fadeSettings.law) fadeSettings.law = 'power';
+
+    function evalFadeEase(p, curve) {
+      if (curve === 'linear') return p;
+      if (curve === 'fast') return 1 - Math.pow(1 - p, 3);
+      if (curve === 'slow') return Math.pow(p, 3);
+      if (curve === 'cut') return p < 0.5 ? 0 : 1;
+      return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    }
+
+    function syncFadeUI() {
+      const sameDur = fadeSettings.timeA === fadeSettings.timeB;
+      const ms = Math.round(fadeSettings.timeA * 1000);
+      const isPreset = !fadeSettings.advActive && sameDur && [2000, 4000, 6000].includes(ms);
+
+      [2000, 4000, 6000].forEach(val => {
+        const btn = document.getElementById(`fade-dur-${val}`);
+        if (btn) btn.classList.toggle('is-active', isPreset && val === ms);
+      });
+      const advBtn = document.getElementById('btn-fade-adv');
+      if (advBtn) {
+        advBtn.classList.toggle('is-active', !isPreset);
+      }
+      const nextPad = document.getElementById('pad-auto-next');
+      if (nextPad) {
+        const lbl = nextPad.querySelector('.pad-label');
+        if (lbl) lbl.innerText = `NEXT ${fadeSettings.autoNextSec}s`;
+      }
+    }
+
+    function setFadeDuration(ms) {
+      const sec = ms / 1000;
+      fadeSettings.timeA = sec;
+      fadeSettings.timeB = sec;
+      fadeSettings.advActive = false;
+      document.getElementById('fade-duration').value = String(ms);
+      safeStorageSet('yt_dj_fade_settings', fadeSettings);
+      syncFadeUI();
+    }
+
+    function drawFadeGraph(curve, law) {
+      const lineA = document.getElementById('cf-line-a');
+      const lineB = document.getElementById('cf-line-b');
+      const fillA = document.getElementById('cf-fill-a');
+      const fillB = document.getElementById('cf-fill-b');
+      const desc = document.getElementById('cf-graph-desc');
+      if (!lineA || !lineB) return;
+
+      const W = 320, H = 84, padTop = 4;
+      const steps = 64;
+      const ptsA = [], ptsB = [];
+
+      for (let i = 0; i <= steps; i++) {
+        const p = i / steps;
+        const t = evalFadeEase(p, curve);
+        const gA = law === 'linear' ? (1 - t) : Math.cos(t * 0.5 * Math.PI);
+        const gB = law === 'linear' ? t : Math.sin(t * 0.5 * Math.PI);
+        const x = (p * W).toFixed(1);
+        const yA = (padTop + (1 - gA) * H).toFixed(1);
+        const yB = (padTop + (1 - gB) * H).toFixed(1);
+        ptsA.push(`${i === 0 ? 'M' : 'L'}${x} ${yA}`);
+        ptsB.push(`${i === 0 ? 'M' : 'L'}${x} ${yB}`);
+      }
+
+      const dA = ptsA.join(' ');
+      const dB = ptsB.join(' ');
+      lineA.setAttribute('d', dA);
+      lineB.setAttribute('d', dB);
+      if (fillA) fillA.setAttribute('d', `${dA} L${W} ${padTop + H} L0 ${padTop + H} Z`);
+      if (fillB) fillB.setAttribute('d', `${dB} L${W} ${padTop + H} L0 ${padTop + H} Z`);
+
+      if (desc) {
+        const names = { smooth: 'Smooth', linear: 'Linear', fast: 'Fast In', slow: 'Slow Tail', cut: 'Hard Cut' };
+        desc.innerText = `${names[curve] || 'Smooth'} · ${law === 'linear' ? 'Equal Gain' : 'Equal Power'}`;
+      }
+    }
+
+    function openFadeModal() {
+      document.getElementById('adv-fade-a').value = fadeSettings.timeA;
+      document.getElementById('adv-fade-b').value = fadeSettings.timeB;
+      document.getElementById('adv-auto-next-sec').value = fadeSettings.autoNextSec;
+      selectFadeCurve(fadeSettings.curve);
+      selectFadeLaw(fadeSettings.law || 'power');
+      document.getElementById('fade-adv-modal').classList.add('open');
+    }
+
+    function closeFadeModal() {
+      document.getElementById('fade-adv-modal').classList.remove('open');
+    }
+
+    function selectFadeCurve(curve) {
+      document.querySelectorAll('.curve-opt').forEach(btn => {
+        btn.classList.toggle('is-selected', btn.dataset.curve === curve);
+      });
+      const selLaw = document.querySelector('.law-opt.is-selected');
+      drawFadeGraph(curve, selLaw ? selLaw.dataset.law : 'power');
+    }
+
+    function selectFadeLaw(law) {
+      document.querySelectorAll('.law-opt').forEach(btn => {
+        btn.classList.toggle('is-selected', btn.dataset.law === law);
+      });
+      const selCurve = document.querySelector('.curve-opt.is-selected');
+      drawFadeGraph(selCurve ? selCurve.dataset.curve : 'smooth', law);
+    }
+
+    function applyFadeSettings() {
+      const tA = Math.max(0, Math.min(30, parseFloat(document.getElementById('adv-fade-a').value) || 0));
+      const tB = Math.max(0, Math.min(30, parseFloat(document.getElementById('adv-fade-b').value) || 0));
+      const nextSec = Math.max(2, Math.min(45, parseInt(document.getElementById('adv-auto-next-sec').value, 10) || 10));
+      const selectedCurveBtn = document.querySelector('.curve-opt.is-selected');
+      const selectedLawBtn = document.querySelector('.law-opt.is-selected');
+      const curve = selectedCurveBtn ? selectedCurveBtn.dataset.curve : 'smooth';
+      const law = selectedLawBtn ? selectedLawBtn.dataset.law : 'power';
+
+      fadeSettings = { timeA: tA, timeB: tB, curve, law, autoNextSec: nextSec, advActive: true };
+      safeStorageSet('yt_dj_fade_settings', fadeSettings);
+      updateVolumes();
+      syncFadeUI();
+      closeFadeModal();
+    }
+
+    function resetFadeSettings() {
+      fadeSettings = { timeA: 4, timeB: 4, curve: 'smooth', law: 'power', autoNextSec: 10, advActive: false };
+      safeStorageSet('yt_dj_fade_settings', fadeSettings);
+      updateVolumes();
+      openFadeModal();
+      syncFadeUI();
+    }
+
+    // --- Track Queue ---
+    function saveQueue() {
+      if (trackQueue.length === 0) queueCursor = 0;
+      else if (queueCursor >= trackQueue.length) queueCursor = 0;
+      safeStorageSet('yt_dj_queue', trackQueue);
+      safeStorageSet('yt_dj_queue_cursor', queueCursor);
+    }
+
+    function setNextTrack(index) {
+      if (index >= 0 && index < trackQueue.length) {
+        queueCursor = index;
+        saveQueue();
+        renderQueue();
+      }
+    }
+
+    async function fetchVideoTitle(videoId) {
+      const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+      const endpoints = [
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`,
+        `https://noembed.com/embed?url=${encodeURIComponent(watchUrl)}`
+      ];
+      for (const endpoint of endpoints) {
+        try {
+          const res = await fetch(endpoint);
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (data && data.title) return data.title;
+        } catch (e) {
+          // Try next endpoint
+        }
+      }
+      return null;
+    }
+
+    document.getElementById('q-url').addEventListener('input', async (e) => {
+      const titleInput = document.getElementById('q-title');
+      if (titleInput.value.trim()) return;
+      const videoId = extractVideoId(e.target.value);
+      if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return;
+
+      const origPlaceholder = titleInput.placeholder;
+      titleInput.placeholder = 'กำลังดึงชื่อเพลง...';
+      const fetched = await fetchVideoTitle(videoId);
+      titleInput.placeholder = origPlaceholder;
+      if (fetched && !titleInput.value.trim() && extractVideoId(document.getElementById('q-url').value) === videoId) {
+        titleInput.value = fetched;
+      }
+    });
+
+    function addToQueue() {
+      const titleInput = document.getElementById('q-title');
+      const urlInput = document.getElementById('q-url');
+      const cueInput = document.getElementById('q-cue');
+      const rawUrl = urlInput.value.trim();
+      if (!rawUrl) return;
+
+      const videoId = extractVideoId(rawUrl);
+      const userTitle = titleInput.value.trim();
+      const cueSec = parseTimeInput(cueInput.value);
+      const itemId = Date.now();
+
+      const item = {
+        id: itemId,
+        title: userTitle || `Track (${videoId})`,
+        url: rawUrl,
+        videoId: videoId,
+        cueStr: formatTime(cueSec),
+        hotCues: null
+      };
+
+      trackQueue.push(item);
+      saveQueue();
+      renderQueue();
+      titleInput.value = '';
+      urlInput.value = '';
+      cueInput.value = '';
+
+      if (!userTitle && /^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+        fetchVideoTitle(videoId).then(fetched => {
+          if (!fetched) return;
+          const target = trackQueue.find(t => t.id === itemId);
+          if (target) {
+            target.title = fetched;
+            saveQueue();
+            renderQueue();
+          }
+        });
+      }
+    }
+
+    function saveDeckToQueue(deck) {
+      const p = players[deck];
+      const data = p && p.getVideoData ? p.getVideoData() : null;
+      const urlVal = document.getElementById(`url-${deck.toLowerCase()}`).value.trim();
+      const videoId = (data && data.video_id) || extractVideoId(urlVal);
+      if (!videoId) return;
+
+      const title = (data && data.title) ? data.title : `Track (${videoId})`;
+      const hcCopy = { ...hotCues[deck] };
+      const hasHotCues = Object.values(hcCopy).some(v => v !== null);
+
+      trackQueue.push({
+        id: Date.now(),
+        title: title,
+        url: urlVal || `https://youtu.be/${videoId}`,
+        videoId: videoId,
+        cueStr: formatTime(cuePoints[deck] || 0),
+        hotCues: hasHotCues ? hcCopy : null
+      });
+
+      saveQueue();
+      renderQueue();
+    }
+
+    function loadFromQueue(index, deck) {
+      const item = trackQueue[index];
+      if (item) loadTrack(deck, item.url || item.videoId, item.cueStr, item.hotCues || null);
+    }
+
+    function removeFromQueue(index) {
+      trackQueue.splice(index, 1);
+      if (index < queueCursor) queueCursor = Math.max(0, queueCursor - 1);
+      if (queueCursor >= trackQueue.length) queueCursor = 0;
+      saveQueue();
+      renderQueue();
+    }
+
+    function clearQueue() {
+      if (trackQueue.length === 0) return;
+      trackQueue = [];
+      queueCursor = 0;
+      saveQueue();
+      renderQueue();
+    }
+
+    function exportQueue() {
+      const blob = new Blob([JSON.stringify(trackQueue, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `yt-dj-queue-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importQueue(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (Array.isArray(parsed)) {
+            trackQueue = parsed;
+            queueCursor = 0;
+            saveQueue();
+            renderQueue();
+          }
+        } catch (err) {
+          alert('ไฟล์ JSON ไม่ถูกต้องครับ');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    let dragSrcIndex = null;
+
+    function handleQueueDragStart(e, idx) {
+      dragSrcIndex = idx;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(idx));
+      e.currentTarget.classList.add('dragging');
+    }
+
+    function handleQueueDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      e.currentTarget.classList.add('drag-over');
+    }
+
+    function handleQueueDragLeave(e) {
+      e.currentTarget.classList.remove('drag-over');
+    }
+
+    function handleQueueDrop(e, targetIdx) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('drag-over');
+      if (dragSrcIndex === null || dragSrcIndex === targetIdx) return;
+      const [moved] = trackQueue.splice(dragSrcIndex, 1);
+      trackQueue.splice(targetIdx, 0, moved);
+      if (dragSrcIndex === queueCursor) {
+        queueCursor = targetIdx;
+      } else if (dragSrcIndex < queueCursor && targetIdx >= queueCursor) {
+        queueCursor--;
+      } else if (dragSrcIndex > queueCursor && targetIdx <= queueCursor) {
+        queueCursor++;
+      }
+      dragSrcIndex = null;
+      saveQueue();
+      renderQueue();
+    }
+
+    function handleQueueDragEnd(e) {
+      dragSrcIndex = null;
+      e.currentTarget.classList.remove('dragging');
+      document.querySelectorAll('.queue-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+    }
+
+    function toggleShortcutPopup(e) {
+      if (e) e.stopPropagation();
+      const popup = document.getElementById('shortcut-popup');
+      const btn = document.getElementById('fab-help');
+      const isOpen = popup.classList.toggle('open');
+      btn.classList.toggle('active', isOpen);
+    }
+
+    document.addEventListener('click', (e) => {
+      const popup = document.getElementById('shortcut-popup');
+      const btn = document.getElementById('fab-help');
+      if (popup && popup.classList.contains('open') && !popup.contains(e.target) && !btn.contains(e.target)) {
+        popup.classList.remove('open');
+        btn.classList.remove('active');
+      }
+    });
+
+    function renderQueue() {
+      const listEl = document.getElementById('queue-list');
+      if (trackQueue.length === 0) {
+        listEl.innerHTML = `<div style="text-align:center; color:var(--muted); font-size:0.78rem; padding:16px;">ยังไม่มีเพลงในคิว — วางลิงก์ด้านบน หรือกด "+ Deck A / B" ได้เลย</div>`;
+        return;
+      }
+      listEl.innerHTML = trackQueue.map((item, idx) => {
+        const safeTitle = escapeHtml(item.title);
+        const safeId = escapeHtml(item.videoId);
+        const safeCue = escapeHtml(item.cueStr || '0:00');
+        const thumbUrl = /^[a-zA-Z0-9_-]{11}$/.test(item.videoId)
+          ? `https://i.ytimg.com/vi/${safeId}/mqdefault.jpg`
+          : '';
+        const hcCount = item.hotCues ? Object.values(item.hotCues).filter(v => v !== null).length : 0;
+        const hcTag = hcCount > 0 ? `<span class="queue-cue-tag" style="color:#93c5fd; background:rgba(59,130,246,0.14);">HC×${hcCount}</span>` : '';
+        const isNext = idx === queueCursor;
+        return `
+        <div class="queue-item${isNext ? ' is-next' : ''}"
+          draggable="true"
+          ondragstart="handleQueueDragStart(event, ${idx})"
+          ondragover="handleQueueDragOver(event)"
+          ondragleave="handleQueueDragLeave(event)"
+          ondrop="handleQueueDrop(event, ${idx})"
+          ondragend="handleQueueDragEnd(event)">
+          <div class="queue-info">
+            <span class="drag-handle" title="ลากเพื่อจัดลำดับคิว"><span class="material-symbols-rounded" style="font-size:16px;">drag_indicator</span></span>
+            <button class="btn-next-idx" onclick="setNextTrack(${idx})" title="${isNext ? 'เพลงถัดไปที่จะ Auto-Load' : 'คลิกเพื่อตั้งเป็นเพลงถัดไป (NEXT)'}">${isNext ? 'NEXT' : idx + 1}</button>
+            ${thumbUrl ? `<img class="queue-thumb" src="${thumbUrl}" alt="" loading="lazy">` : ''}
+            <div class="queue-meta">
+              <span class="queue-title" title="${safeTitle}">${safeTitle}</span>
+              <div class="queue-sub">
+                <span class="queue-id">${safeId}</span>
+                <span class="queue-cue-tag">CUE ${safeCue}</span>
+                ${hcTag}
+              </div>
+            </div>
+          </div>
+          <div class="queue-actions">
+            <button class="btn-load-a" onclick="loadFromQueue(${idx}, 'A')">Deck A</button>
+            <button class="btn-load-b" onclick="loadFromQueue(${idx}, 'B')">Deck B</button>
+            <button class="btn-del" onclick="removeFromQueue(${idx})" title="ลบออกจากคิว"><span class="material-symbols-rounded" style="font-size:15px;">close</span></button>
+          </div>
+        </div>
+      `;
+      }).join('');
+    }
+
+    // --- Core Playback ---
+    function togglePlay(deck) {
+      const p = players[deck];
+      if (!p || !p.getPlayerState) return;
+      if (p.unMute) p.unMute();
+      updateVolumes();
+      p.getPlayerState() === YT.PlayerState.PLAYING ? p.pauseVideo() : p.playVideo();
+    }
+
+    function parseTimeInput(str) {
+      str = String(str).trim();
+      if (!str) return 0;
+      if (str.includes(':')) {
+        const parts = str.split(':').map(Number);
+        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+          return (parts[0] * 60) + parts[1];
+        }
+      }
+      const sec = parseFloat(str);
+      return isNaN(sec) ? 0 : sec;
+    }
+
+    function setCueFromInput(deck) {
+      const val = document.getElementById(`cue-input-${deck.toLowerCase()}`).value;
+      const seconds = parseTimeInput(val);
+      cuePoints[deck] = seconds;
+      document.getElementById(`cue-status-${deck.toLowerCase()}`).innerText = `CUE: ${formatTime(seconds)}`;
+      
+      const p = players[deck];
+      if (p && p.seekTo) {
+        p.seekTo(seconds, true);
+        p.pauseVideo();
+      }
+    }
+
+    function setCuePoint(deck) {
+      const p = players[deck];
+      if (p && p.getCurrentTime) {
+        const cur = p.getCurrentTime();
+        cuePoints[deck] = cur;
+        document.getElementById(`cue-input-${deck.toLowerCase()}`).value = formatTime(cur);
+        document.getElementById(`cue-status-${deck.toLowerCase()}`).innerText = `CUE: ${formatTime(cur)}`;
+      }
+    }
+
+    function triggerCue(deck) {
+      const p = players[deck];
+      if (p && p.seekTo) {
+        clearLoop(deck);
+        if (p.unMute) p.unMute();
+        updateVolumes();
+        p.seekTo(cuePoints[deck], true);
+        p.playVideo();
+        autoNextTriggered = false;
+        
+        const btn = document.getElementById(`btn-cue-${deck.toLowerCase()}`);
+        btn.classList.add('active-flash');
+        setTimeout(() => btn.classList.remove('active-flash'), 150);
+      }
+    }
+
+    function setSpeed(deck, rate) {
+      const val = parseFloat(rate);
+      const valBtn = document.getElementById(`rate-val-${deck.toLowerCase()}`);
+      if (valBtn) valBtn.innerText = `${val.toFixed(2)}x`;
+      if (players[deck] && players[deck].setPlaybackRate) {
+        players[deck].setPlaybackRate(val);
+      }
+    }
+
+    function resetSpeed(deck) {
+      const slider = document.getElementById(`rate-${deck.toLowerCase()}`);
+      if (slider) slider.value = '1';
+      setSpeed(deck, 1);
+    }
+
+    function resetCrossfader() {
+      document.getElementById('crossfader').value = 0;
+      updateVolumes();
+    }
+
+    function startAutoFade(targetValue) {
+      cancelAutoFade();
+      const targetDeck = targetValue < 0 ? 'A' : 'B';
+      const targetPlayer = players[targetDeck];
+      
+      if (targetPlayer && targetPlayer.getPlayerState) {
+        if (targetPlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+          triggerCue(targetDeck);
+        }
+      }
+
+      const slider = document.getElementById('crossfader');
+      const startValue = parseFloat(slider.value);
+      const durationSec = targetDeck === 'A' ? fadeSettings.timeA : fadeSettings.timeB;
+      const duration = fadeSettings.curve === 'cut' ? 0 : durationSec * 1000;
+
+      function finishFade() {
+        fadeAnimationId = null;
+        autoNextTriggered = false;
+        const oldDeck = targetValue < 0 ? 'B' : 'A';
+        clearLoop(oldDeck);
+        if (players[oldDeck] && players[oldDeck].pauseVideo) {
+          players[oldDeck].pauseVideo();
+        }
+        const autoLoadEl = document.getElementById('auto-load-toggle');
+        if (autoLoadEl && autoLoadEl.checked && trackQueue.length > 0) {
+          const nextTrack = trackQueue[queueCursor % trackQueue.length];
+          queueCursor = (queueCursor + 1) % trackQueue.length;
+          saveQueue();
+          renderQueue();
+          loadTrack(oldDeck, nextTrack.url || nextTrack.videoId, nextTrack.cueStr, nextTrack.hotCues || null);
+        }
+      }
+
+      if (duration <= 0) {
+        slider.value = targetValue;
+        updateVolumes();
+        finishFade();
+        return;
+      }
+
+      const startTime = performance.now();
+      function easeCurve(p, curve) {
+        if (curve === 'linear') return p;
+        if (curve === 'fast') return 1 - Math.pow(1 - p, 3);
+        if (curve === 'slow') return Math.pow(p, 3);
+        return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      }
+
+      function animate(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = easeCurve(progress, fadeSettings.curve);
+
+        slider.value = startValue + (targetValue - startValue) * ease;
+        updateVolumes();
+
+        if (progress < 1) {
+          fadeAnimationId = requestAnimationFrame(animate);
+        } else {
+          finishFade();
+        }
+      }
+      fadeAnimationId = requestAnimationFrame(animate);
+    }
+
+    function cancelAutoFade() {
+      if (fadeAnimationId !== null) {
+        cancelAnimationFrame(fadeAnimationId);
+        fadeAnimationId = null;
+      }
+    }
+
+    function seekTrack(deck, percent) {
+      const p = players[deck];
+      if (p && p.getDuration) {
+        clearLoop(deck);
+        p.seekTo((percent / 100) * p.getDuration(), true);
+      }
+    }
+
+    function formatTime(sec) {
+      sec = Math.max(0, sec);
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function tickEngine() {
+      const cf = parseFloat(document.getElementById('crossfader').value);
+      const autoNextEnabled = document.getElementById('auto-next-toggle').checked;
+
+      ['A', 'B'].forEach(deck => {
+        const p = players[deck];
+        const card = document.getElementById(`deck-card-${deck.toLowerCase()}`);
+        const remEl = document.getElementById(`rem-${deck.toLowerCase()}`);
+
+        if (p && p.getCurrentTime && p.getDuration && p.getPlayerState) {
+          const vData = p.getVideoData ? p.getVideoData() : null;
+          if (vData && vData.title) {
+            const titleEl = document.getElementById(`title-${deck.toLowerCase()}`);
+            if (titleEl && titleEl.innerText !== vData.title) {
+              titleEl.innerText = vData.title;
+              titleEl.title = vData.title;
+            }
+          }
+          if (vData && vData.video_id) {
+            const sideLabelEl = document.getElementById(`side-vinyl-label-${deck.toLowerCase()}`);
+            const wantBg = `url("https://i.ytimg.com/vi/${vData.video_id}/mqdefault.jpg")`;
+            if (sideLabelEl && sideLabelEl.dataset.vid !== vData.video_id) {
+              sideLabelEl.dataset.vid = vData.video_id;
+              sideLabelEl.style.backgroundImage = wantBg;
+            }
+          }
+          const cur = p.getCurrentTime();
+          const dur = p.getDuration();
+          const state = p.getPlayerState();
+          const isPlaying = state === YT.PlayerState.PLAYING;
+
+          card.classList.toggle('is-playing', isPlaying);
+
+          const sideDiscEl = document.getElementById(`side-vinyl-disc-${deck.toLowerCase()}`);
+          const rateSlider = document.getElementById(`rate-${deck.toLowerCase()}`);
+          if (sideDiscEl && rateSlider) {
+            const rate = parseFloat(rateSlider.value) || 1;
+            sideDiscEl.style.animationDuration = `${(2.8 / rate).toFixed(2)}s`;
+          }
+
+          const playBtn = document.getElementById(`btn-play-${deck.toLowerCase()}`);
+          if (playBtn) {
+            const iconEl = playBtn.querySelector('.material-symbols-rounded');
+            const wantIcon = isPlaying ? 'pause' : 'play_arrow';
+            if (iconEl && iconEl.innerText !== wantIcon) iconEl.innerText = wantIcon;
+          }
+
+          if (dur > 0) {
+            const rem = dur - cur;
+            document.getElementById(`seek-${deck.toLowerCase()}`).value = (cur / dur) * 100;
+            document.getElementById(`time-${deck.toLowerCase()}`).innerText = formatTime(cur);
+            remEl.innerText = `-${formatTime(rem)}`;
+
+            if (state === YT.PlayerState.PLAYING && rem <= 20 && rem > 0) {
+              card.classList.add('ending-soon');
+              remEl.classList.add('danger');
+            } else {
+              card.classList.remove('ending-soon');
+              remEl.classList.remove('danger');
+            }
+
+            const loop = loopState[deck];
+            if (loop.active && state === YT.PlayerState.PLAYING) {
+              if (cur >= loop.start + loop.length) {
+                p.seekTo(loop.start, true);
+              }
+            }
+
+            if (autoNextEnabled && !autoNextTriggered && fadeAnimationId === null && state === YT.PlayerState.PLAYING && rem <= fadeSettings.autoNextSec && rem > 1) {
+              if (deck === 'A' && cf < 0) {
+                autoNextTriggered = true;
+                startAutoFade(100);
+              } else if (deck === 'B' && cf > 0) {
+                autoNextTriggered = true;
+                startAutoFade(-100);
+              }
+            }
+          }
+        }
+      });
+    }
+
+    document.addEventListener('keydown', (e) => {
+      const tag = document.activeElement.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+      const key = e.key.toLowerCase();
+      const slider = document.getElementById('crossfader');
+      const masterSlider = document.getElementById('master-vol');
+
+      if (key === 'q') triggerCue('A');
+      else if (key === 'a') togglePlay('A');
+      else if (key === 'p') triggerCue('B');
+      else if (key === 'l') togglePlay('B');
+      else if (key === 't') toggleTalkDuck();
+      else if (key === 'z' && !e.repeat) nudgeSpeed('A', 0.75, 'down');
+      else if (key === 'x' && !e.repeat) nudgeSpeed('A', 1.25, 'up');
+      else if (key === 'n' && !e.repeat) nudgeSpeed('B', 0.75, 'down');
+      else if (key === 'm' && !e.repeat) nudgeSpeed('B', 1.25, 'up');
+      else if (e.key === '1') jumpHotCue('A', 1);
+      else if (e.key === '2') jumpHotCue('A', 2);
+      else if (e.key === '3') jumpHotCue('A', 3);
+      else if (e.key === '8') jumpHotCue('B', 1);
+      else if (e.key === '9') jumpHotCue('B', 2);
+      else if (e.key === '0') jumpHotCue('B', 3);
+      else if (e.key === '[') startAutoFade(-100);
+      else if (e.key === ']') startAutoFade(100);
+      else if (key === 'c') { cancelAutoFade(); resetCrossfader(); }
+      else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        cancelAutoFade();
+        slider.value = Math.max(-100, parseFloat(slider.value) - 10);
+        updateVolumes();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        cancelAutoFade();
+        slider.value = Math.min(100, parseFloat(slider.value) + 10);
+        updateVolumes();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        masterSlider.value = Math.min(100, parseFloat(masterSlider.value) + 5);
+        manualMasterChange();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        masterSlider.value = Math.max(0, parseFloat(masterSlider.value) - 5);
+        manualMasterChange();
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (key === 'z' || key === 'x') nudgeSpeed('A', null);
+      if (key === 'n' || key === 'm') nudgeSpeed('B', null);
+      if (e.key === 'Escape') {
+        closeFadeModal();
+        const popup = document.getElementById('shortcut-popup');
+        const btn = document.getElementById('fab-help');
+        if (popup) popup.classList.remove('open');
+        if (btn) btn.classList.remove('active');
+      }
+    });
+
+    setupVinylScratch('A');
+    setupVinylScratch('B');
+    setupKnob('knob-ch-a', 'ch-vol-a', false);
+    setupKnob('knob-master', 'master-vol', true);
+    setupKnob('knob-ch-b', 'ch-vol-b', false);
+    updateVolumes();
+    syncFadeUI();
+  </script>
+</body>
+</html>
