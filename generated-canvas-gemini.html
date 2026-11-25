@@ -403,7 +403,38 @@
       font-variant-numeric: tabular-nums;
       color: var(--muted);
     }
-    .seek-bar input[type="range"] { flex: 1; }
+    .seek-track-wrap {
+      position: relative;
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+    .seek-track-wrap input[type="range"] {
+      width: 100%;
+      position: relative;
+      z-index: 2;
+      background: rgba(255, 255, 255, 0.14);
+    }
+    .seek-loop-range {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(168, 85, 247, 0.65);
+      pointer-events: none;
+      z-index: 1;
+      display: none;
+    }
+    .seek-loop-range.is-armed {
+      display: block;
+      width: 3px !important;
+      height: 12px;
+      background: #fbbf24;
+    }
+    .seek-loop-range.is-active {
+      display: block;
+    }
     .rem-time { font-weight: 500; }
     .rem-time.danger { color: var(--warn); }
 
@@ -482,13 +513,41 @@
       align-items: center;
       gap: 6px;
     }
-    .loop-group { display: flex; gap: 4px; }
-    .btn-loop { font-size: 0.72rem; padding: 6px 10px; background: var(--surface); color: var(--muted); }
+    .loop-group {
+      display: inline-flex;
+      align-items: center;
+      background: var(--surface);
+      padding: 2px;
+      border-radius: 999px;
+      gap: 2px;
+    }
+    .btn-loop {
+      font-size: 0.72rem;
+      padding: 5px 10px;
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
     .btn-loop:hover { color: var(--text); background: var(--surface-elevated); }
-    .btn-loop.active {
-      background: var(--accent);
-      color: #000000;
+    .btn-loop.is-armed {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
       font-weight: 700;
+    }
+    .btn-loop.active {
+      background: #8b5cf6;
+      color: #ffffff;
+      font-weight: 700;
+    }
+    .btn-loop-step {
+      padding: 5px 7px;
+      font-size: 0.7rem;
+      color: #8c8c8c;
+      pointer-events: none;
+    }
+    .loop-group.has-loop .btn-loop-step {
+      color: var(--text);
+      pointer-events: auto;
     }
 
     /* Pitch & Nudge */
@@ -1356,7 +1415,10 @@
       </div>
       <div class="seek-bar">
         <span id="time-a">0:00</span>
-        <input type="range" id="seek-a" min="0" max="100" value="0" oninput="seekTrack('A', this.value)">
+        <div class="seek-track-wrap">
+          <div class="seek-loop-range" id="loop-range-a"></div>
+          <input type="range" id="seek-a" min="0" max="100" value="0" oninput="seekTrack('A', this.value)">
+        </div>
         <span id="rem-a" class="rem-time">-0:00</span>
       </div>
 
@@ -1393,9 +1455,10 @@
           <button class="btn-play" id="btn-play-a" onclick="togglePlay('A')" title="Play / Pause (คีย์ลัด A)"><span class="material-symbols-rounded">play_arrow</span></button>
           <button class="btn-cue" id="btn-cue-a" onclick="triggerCue('A')">CUE <span class="kbd-hint">Q</span></button>
         </div>
-        <div class="loop-group">
-          <button class="btn-loop" id="loop-A-4" onclick="toggleLoop('A', 4)">Loop 4s</button>
-          <button class="btn-loop" id="loop-A-8" onclick="toggleLoop('A', 8)">Loop 8s</button>
+        <div class="loop-group" id="loop-group-A">
+          <button class="btn-loop btn-loop-step" onclick="scaleLoop('A', 0.5)" title="ย่อช่วง Loop ลงครึ่งหนึ่ง">÷2</button>
+          <button class="btn-loop" id="loop-btn-A" onclick="handleLoopClick('A')" title="กดครั้งที่ 1: เริ่มจุด Loop (IN) · ครั้งที่ 2: จบจุด Loop (OUT) · ครั้งที่ 3: ออก">LOOP</button>
+          <button class="btn-loop btn-loop-step" onclick="scaleLoop('A', 2)" title="ขยายช่วง Loop เป็น 2 เท่า">×2</button>
         </div>
         <div class="pitch-control">
           <button class="btn-nudge" id="nudge-A-down" onmousedown="nudgeSpeed('A', -0.10, 'down')" onmouseup="nudgeSpeed('A', null)" onmouseleave="nudgeSpeed('A', null)" title="กดค้างเพื่อชะลอจังหวะชั่วคราว -0.10x (คีย์ลัด Z)">-</button>
@@ -1539,7 +1602,10 @@
       </div>
       <div class="seek-bar">
         <span id="time-b">0:00</span>
-        <input type="range" id="seek-b" min="0" max="100" value="0" oninput="seekTrack('B', this.value)">
+        <div class="seek-track-wrap">
+          <div class="seek-loop-range" id="loop-range-b"></div>
+          <input type="range" id="seek-b" min="0" max="100" value="0" oninput="seekTrack('B', this.value)">
+        </div>
         <span id="rem-b" class="rem-time">-0:00</span>
       </div>
 
@@ -1576,9 +1642,10 @@
           <button class="btn-play" id="btn-play-b" onclick="togglePlay('B')" title="Play / Pause (คีย์ลัด L)"><span class="material-symbols-rounded">play_arrow</span></button>
           <button class="btn-cue" id="btn-cue-b" onclick="triggerCue('B')">CUE <span class="kbd-hint">P</span></button>
         </div>
-        <div class="loop-group">
-          <button class="btn-loop" id="loop-B-4" onclick="toggleLoop('B', 4)">Loop 4s</button>
-          <button class="btn-loop" id="loop-B-8" onclick="toggleLoop('B', 8)">Loop 8s</button>
+        <div class="loop-group" id="loop-group-B">
+          <button class="btn-loop btn-loop-step" onclick="scaleLoop('B', 0.5)" title="ย่อช่วง Loop ลงครึ่งหนึ่ง">÷2</button>
+          <button class="btn-loop" id="loop-btn-B" onclick="handleLoopClick('B')" title="กดครั้งที่ 1: เริ่มจุด Loop (IN) · ครั้งที่ 2: จบจุด Loop (OUT) · ครั้งที่ 3: ออก">LOOP</button>
+          <button class="btn-loop btn-loop-step" onclick="scaleLoop('B', 2)" title="ขยายช่วง Loop เป็น 2 เท่า">×2</button>
         </div>
         <div class="pitch-control">
           <button class="btn-nudge" id="nudge-B-down" onmousedown="nudgeSpeed('B', -0.10, 'down')" onmouseup="nudgeSpeed('B', null)" onmouseleave="nudgeSpeed('B', null)" title="กดค้างเพื่อชะลอจังหวะชั่วคราว -0.10x (คีย์ลัด N)">-</button>
@@ -1738,8 +1805,8 @@
     const cuePoints = { A: 0, B: 0 };
     const hotCues = { A: { 1: null, 2: null, 3: null }, B: { 1: null, 2: null, 3: null } };
     const loopState = {
-      A: { active: false, start: 0, length: 0 },
-      B: { active: false, start: 0, length: 0 }
+      A: { active: false, armed: false, start: 0, length: 0, lastJumpAt: 0 },
+      B: { active: false, armed: false, start: 0, length: 0, lastJumpAt: 0 }
     };
     const tapTimes = { A: [], B: [] };
 
@@ -1799,6 +1866,7 @@
       });
 
       setInterval(tickEngine, 200);
+      setInterval(tickLoop, 50);
       renderQueue();
     }
 
@@ -2024,28 +2092,105 @@
       }
     }
 
-    // --- Loop ---
-    function toggleLoop(deck, lengthSec) {
+    // --- Manual IN / OUT Loop + 50ms Engine + Micro-Fade ---
+    function updateLoopVisual(deck) {
+      const state = loopState[deck];
+      const btn = document.getElementById(`loop-btn-${deck}`);
+      const group = document.getElementById(`loop-group-${deck}`);
+      const rangeEl = document.getElementById(`loop-range-${deck.toLowerCase()}`);
+      const p = players[deck];
+      const dur = (p && p.getDuration) ? p.getDuration() : 0;
+
+      if (btn) {
+        btn.classList.toggle('is-armed', state.armed);
+        btn.classList.toggle('active', state.active);
+        if (state.armed) {
+          btn.innerText = `IN ${formatTime(state.start)}`;
+        } else if (state.active) {
+          btn.innerText = `${formatTime(state.start)}–${formatTime(state.start + state.length)}`;
+        } else {
+          btn.innerText = 'LOOP';
+        }
+      }
+      if (group) group.classList.toggle('has-loop', state.active);
+
+      if (rangeEl) {
+        rangeEl.classList.toggle('is-armed', state.armed);
+        rangeEl.classList.toggle('is-active', state.active);
+        if (dur > 0 && (state.armed || state.active)) {
+          const leftPct = Math.max(0, Math.min(100, (state.start / dur) * 100));
+          rangeEl.style.left = `${leftPct.toFixed(2)}%`;
+          if (state.active) {
+            const widthPct = Math.max(0.5, Math.min(100 - leftPct, (state.length / dur) * 100));
+            rangeEl.style.width = `${widthPct.toFixed(2)}%`;
+          }
+        }
+      }
+    }
+
+    function handleLoopClick(deck) {
       const state = loopState[deck];
       const p = players[deck];
       if (!p || !p.getCurrentTime) return;
+      const cur = p.getCurrentTime();
 
-      if (state.active && state.length === lengthSec) {
-        clearLoop(deck);
+      if (!state.armed && !state.active) {
+        state.armed = true;
+        state.start = cur;
+        state.length = 0;
+      } else if (state.armed) {
+        if (cur > state.start + 0.25) {
+          state.armed = false;
+          state.active = true;
+          state.length = cur - state.start;
+          state.lastJumpAt = performance.now();
+          p.seekTo(state.start, true);
+        } else {
+          clearLoop(deck);
+          return;
+        }
       } else {
         clearLoop(deck);
-        state.active = true;
-        state.start = p.getCurrentTime();
-        state.length = lengthSec;
-        document.getElementById(`loop-${deck}-${lengthSec}`).classList.add('active');
+        return;
       }
+      updateLoopVisual(deck);
+    }
+
+    function scaleLoop(deck, factor) {
+      const state = loopState[deck];
+      if (!state.active) return;
+      state.length = Math.max(0.4, Math.min(60, +(state.length * factor).toFixed(2)));
+      updateLoopVisual(deck);
     }
 
     function clearLoop(deck) {
       loopState[deck].active = false;
-      [4, 8].forEach(len => {
-        const el = document.getElementById(`loop-${deck}-${len}`);
-        if (el) el.classList.remove('active');
+      loopState[deck].armed = false;
+      loopState[deck].length = 0;
+      updateLoopVisual(deck);
+    }
+
+    function tickLoop() {
+      const now = performance.now();
+      ['A', 'B'].forEach(deck => {
+        const state = loopState[deck];
+        const p = players[deck];
+        if (!state.active || !p || !p.getCurrentTime || !p.getPlayerState) return;
+        if (p.getPlayerState() !== YT.PlayerState.PLAYING) return;
+
+        const cur = p.getCurrentTime();
+        if (cur >= state.start + state.length && (now - state.lastJumpAt) > 300) {
+          state.lastJumpAt = now;
+          // Brief micro-fade dip (~90ms) to soften YouTube seek jump
+          if (p.getVolume && p.setVolume) {
+            const origVol = p.getVolume();
+            p.setVolume(Math.round(origVol * 0.55));
+            setTimeout(() => {
+              if (players[deck] && players[deck].setVolume) updateVolumes();
+            }, 95);
+          }
+          p.seekTo(state.start, true);
+        }
       });
     }
 
@@ -3075,11 +3220,8 @@
               remEl.classList.remove('danger');
             }
 
-            const loop = loopState[deck];
-            if (loop.active && state === YT.PlayerState.PLAYING) {
-              if (cur >= loop.start + loop.length) {
-                p.seekTo(loop.start, true);
-              }
+            if (loopState[deck].active || loopState[deck].armed) {
+              updateLoopVisual(deck);
             }
 
             if (autoNextEnabled && !autoNextTriggered && fadeAnimationId === null && state === YT.PlayerState.PLAYING && rem <= fadeSettings.autoNextSec && rem > 1) {
