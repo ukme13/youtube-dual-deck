@@ -3604,7 +3604,8 @@
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({
           video: { width: 1, height: 1, frameRate: 1 },
-          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+          preferCurrentTab: true
         });
         const audioTracks = stream.getAudioTracks();
         if (!audioTracks || audioTracks.length === 0) {
