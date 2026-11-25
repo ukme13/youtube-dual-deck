@@ -1586,7 +1586,7 @@
           <button class="btn-loop" onclick="openLoopModal('A')" title="ตั้ง/แก้ไขเวลา Loop แบบละเอียด (IN / OUT)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:14px;">tune</span></button>
         </div>
         <div class="pitch-control">
-          <input type="range" id="rate-a" class="pitch-slider" min="0.75" max="1.25" step="0.01" value="1" oninput="cancelResetSpeed('A'); setSpeed('A', this.value)" onkeydown="handlePitchKey(event, 'A')" title="ปรับความเร็ว (Pitch) · กด Shift+ลูกศร = ทีละ 0.05x">
+          <input type="range" id="rate-a" class="pitch-slider" min="0.50" max="1.50" step="0.25" value="1" oninput="cancelResetSpeed('A'); setSpeed('A', this.value)" title="ปรับความเร็ว (ทีละ 0.25x ตามที่ YouTube รองรับ)">
           <button class="btn-pitch-reset" id="rate-val-a" onclick="resetSpeed('A')" title="คลิกเพื่อค่อยๆ รีเซ็ตกลับเป็น 1.00x">1.00x</button>
           <button class="btn-match-bpm" id="btn-match-a" onclick="matchBpm('A')" title="ปรับความเร็วให้ BPM ตรงกับ Deck B">MATCH</button>
         </div>
@@ -1785,7 +1785,7 @@
           <button class="btn-loop" onclick="openLoopModal('B')" title="ตั้ง/แก้ไขเวลา Loop แบบละเอียด (IN / OUT)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:14px;">tune</span></button>
         </div>
         <div class="pitch-control">
-          <input type="range" id="rate-b" class="pitch-slider" min="0.75" max="1.25" step="0.01" value="1" oninput="cancelResetSpeed('B'); setSpeed('B', this.value)" onkeydown="handlePitchKey(event, 'B')" title="ปรับความเร็ว (Pitch) · กด Shift+ลูกศร = ทีละ 0.05x">
+          <input type="range" id="rate-b" class="pitch-slider" min="0.50" max="1.50" step="0.25" value="1" oninput="cancelResetSpeed('B'); setSpeed('B', this.value)" title="ปรับความเร็ว (ทีละ 0.25x ตามที่ YouTube รองรับ)">
           <button class="btn-pitch-reset" id="rate-val-b" onclick="resetSpeed('B')" title="คลิกเพื่อค่อยๆ รีเซ็ตกลับเป็น 1.00x">1.00x</button>
           <button class="btn-match-bpm" id="btn-match-b" onclick="matchBpm('B')" title="ปรับความเร็วให้ BPM ตรงกับ Deck A">MATCH</button>
         </div>
@@ -2253,7 +2253,7 @@
       const otherRate = parseFloat(document.getElementById(`rate-${other.toLowerCase()}`)?.value) || 1;
       const effectiveOtherBpm = otherBpm * otherRate;
       const rawRate = effectiveOtherBpm / myBpm;
-      const clampedRate = Math.max(0.75, Math.min(1.25, +rawRate.toFixed(2)));
+      const clampedRate = Math.max(0.5, Math.min(1.5, +(Math.round(rawRate / 0.25) * 0.25).toFixed(2)));
       cancelResetSpeed(deck);
       const slider = document.getElementById(`rate-${deck.toLowerCase()}`);
       if (slider) slider.value = String(clampedRate);
@@ -3411,23 +3411,12 @@
       }
     }
 
-    function handlePitchKey(e, deck) {
-      if (!e.ctrlKey && !e.shiftKey && !e.altKey) return;
-      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        stepSpeed(deck, 0.05);
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        stepSpeed(deck, -0.05);
-      }
-    }
-
     function stepSpeed(deck, delta) {
       cancelResetSpeed(deck);
       const slider = document.getElementById(`rate-${deck.toLowerCase()}`);
       if (!slider) return;
       const cur = parseFloat(slider.value) || 1;
-      const next = Math.max(0.75, Math.min(1.25, +(cur + delta).toFixed(2)));
+      const next = Math.max(0.5, Math.min(1.5, +(cur + delta).toFixed(2)));
       slider.value = String(next);
       setSpeed(deck, next);
     }
@@ -3443,7 +3432,7 @@
         return;
       }
       resetSpeedTimers[deck] = setInterval(() => {
-        const step = cur > 1 ? -0.05 : 0.05;
+        const step = cur > 1 ? -0.25 : 0.25;
         cur = +(cur + step).toFixed(2);
         if ((step < 0 && cur <= 1) || (step > 0 && cur >= 1)) {
           cur = 1;
@@ -3451,7 +3440,7 @@
         }
         slider.value = String(cur);
         setSpeed(deck, cur);
-      }, 280);
+      }, 240);
     }
 
     function resetCrossfader() {
@@ -3690,11 +3679,11 @@
       else if (code === 'KeyP') triggerCue('B');
       else if (code === 'KeyL') togglePlay('B');
       else if (code === 'KeyT') toggleTalkDuck();
-      else if (code === 'KeyW') stepSpeed('A', 0.05);
-      else if (code === 'KeyS') stepSpeed('A', -0.05);
+      else if (code === 'KeyW') stepSpeed('A', 0.25);
+      else if (code === 'KeyS') stepSpeed('A', -0.25);
       else if (code === 'KeyR') resetSpeed('A');
-      else if (code === 'KeyO') stepSpeed('B', 0.05);
-      else if (code === 'KeyK') stepSpeed('B', -0.05);
+      else if (code === 'KeyO') stepSpeed('B', 0.25);
+      else if (code === 'KeyK') stepSpeed('B', -0.25);
       else if (code === 'KeyI') resetSpeed('B');
       else if (code === 'Digit1' || code === 'Numpad1') jumpHotCue('A', 1);
       else if (code === 'Digit2' || code === 'Numpad2') jumpHotCue('A', 2);
