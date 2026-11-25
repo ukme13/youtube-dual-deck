@@ -1398,10 +1398,10 @@
           <button class="btn-loop" id="loop-A-8" onclick="toggleLoop('A', 8)">Loop 8s</button>
         </div>
         <div class="pitch-control">
-          <button class="btn-nudge" id="nudge-A-down" onmousedown="nudgeSpeed('A', 0.75, 'down')" onmouseup="nudgeSpeed('A', null)" onmouseleave="nudgeSpeed('A', null)" title="กดค้างเพื่อชะลอจังหวะชั่วคราว (คีย์ลัด Z)">-</button>
-          <input type="range" id="rate-a" class="pitch-slider" min="0.75" max="1.25" step="0.05" value="1" oninput="setSpeed('A', this.value)" title="ปรับความเร็ว (Pitch)">
-          <button class="btn-pitch-reset" id="rate-val-a" onclick="resetSpeed('A')" title="คลิกเพื่อรีเซ็ตเป็น 1.00x">1.00x</button>
-          <button class="btn-nudge" id="nudge-A-up" onmousedown="nudgeSpeed('A', 1.25, 'up')" onmouseup="nudgeSpeed('A', null)" onmouseleave="nudgeSpeed('A', null)" title="กดค้างเพื่อเร่งจังหวะชั่วคราว (คีย์ลัด X)">+</button>
+          <button class="btn-nudge" id="nudge-A-down" onmousedown="nudgeSpeed('A', -0.10, 'down')" onmouseup="nudgeSpeed('A', null)" onmouseleave="nudgeSpeed('A', null)" title="กดค้างเพื่อชะลอจังหวะชั่วคราว -0.10x (คีย์ลัด Z)">-</button>
+          <input type="range" id="rate-a" class="pitch-slider" min="0.75" max="1.25" step="0.05" value="1" oninput="cancelResetSpeed('A'); setSpeed('A', this.value)" title="ปรับความเร็ว (Pitch)">
+          <button class="btn-pitch-reset" id="rate-val-a" onclick="resetSpeed('A')" title="คลิกเพื่อค่อยๆ รีเซ็ตกลับเป็น 1.00x">1.00x</button>
+          <button class="btn-nudge" id="nudge-A-up" onmousedown="nudgeSpeed('A', 0.10, 'up')" onmouseup="nudgeSpeed('A', null)" onmouseleave="nudgeSpeed('A', null)" title="กดค้างเพื่อเร่งจังหวะชั่วคราว +0.10x (คีย์ลัด X)">+</button>
         </div>
       </div>
     </div>
@@ -1581,10 +1581,10 @@
           <button class="btn-loop" id="loop-B-8" onclick="toggleLoop('B', 8)">Loop 8s</button>
         </div>
         <div class="pitch-control">
-          <button class="btn-nudge" id="nudge-B-down" onmousedown="nudgeSpeed('B', 0.75, 'down')" onmouseup="nudgeSpeed('B', null)" onmouseleave="nudgeSpeed('B', null)" title="กดค้างเพื่อชะลอจังหวะชั่วคราว (คีย์ลัด N)">-</button>
-          <input type="range" id="rate-b" class="pitch-slider" min="0.75" max="1.25" step="0.05" value="1" oninput="setSpeed('B', this.value)" title="ปรับความเร็ว (Pitch)">
-          <button class="btn-pitch-reset" id="rate-val-b" onclick="resetSpeed('B')" title="คลิกเพื่อรีเซ็ตเป็น 1.00x">1.00x</button>
-          <button class="btn-nudge" id="nudge-B-up" onmousedown="nudgeSpeed('B', 1.25, 'up')" onmouseup="nudgeSpeed('B', null)" onmouseleave="nudgeSpeed('B', null)" title="กดค้างเพื่อเร่งจังหวะชั่วคราว (คีย์ลัด M)">+</button>
+          <button class="btn-nudge" id="nudge-B-down" onmousedown="nudgeSpeed('B', -0.10, 'down')" onmouseup="nudgeSpeed('B', null)" onmouseleave="nudgeSpeed('B', null)" title="กดค้างเพื่อชะลอจังหวะชั่วคราว -0.10x (คีย์ลัด N)">-</button>
+          <input type="range" id="rate-b" class="pitch-slider" min="0.75" max="1.25" step="0.05" value="1" oninput="cancelResetSpeed('B'); setSpeed('B', this.value)" title="ปรับความเร็ว (Pitch)">
+          <button class="btn-pitch-reset" id="rate-val-b" onclick="resetSpeed('B')" title="คลิกเพื่อค่อยๆ รีเซ็ตกลับเป็น 1.00x">1.00x</button>
+          <button class="btn-nudge" id="nudge-B-up" onmousedown="nudgeSpeed('B', 0.10, 'up')" onmouseup="nudgeSpeed('B', null)" onmouseleave="nudgeSpeed('B', null)" title="กดค้างเพื่อเร่งจังหวะชั่วคราว +0.10x (คีย์ลัด M)">+</button>
         </div>
       </div>
     </div>
@@ -1979,19 +1979,20 @@
     }
 
     // --- Nudge Speed ---
-    function nudgeSpeed(deck, tempRate, dir = null) {
+    function nudgeSpeed(deck, deltaOrNull, dir = null) {
       const p = players[deck];
       if (!p || !p.setPlaybackRate) return;
       
       const btnDown = document.getElementById(`nudge-${deck}-down`);
       const btnUp = document.getElementById(`nudge-${deck}-up`);
+      const baseRate = parseFloat(document.getElementById(`rate-${deck.toLowerCase()}`).value) || 1;
 
-      if (tempRate !== null) {
-        p.setPlaybackRate(tempRate);
+      if (deltaOrNull !== null) {
+        const targetRate = Math.max(0.75, Math.min(1.25, +(baseRate + deltaOrNull).toFixed(2)));
+        p.setPlaybackRate(targetRate);
         if (dir === 'down' && btnDown) btnDown.classList.add('nudging');
         if (dir === 'up' && btnUp) btnUp.classList.add('nudging');
       } else {
-        const baseRate = parseFloat(document.getElementById(`rate-${deck.toLowerCase()}`).value);
         p.setPlaybackRate(baseRate);
         if (btnDown) btnDown.classList.remove('nudging');
         if (btnUp) btnUp.classList.remove('nudging');
@@ -2816,6 +2817,15 @@
       }
     }
 
+    const resetSpeedTimers = { A: null, B: null };
+
+    function cancelResetSpeed(deck) {
+      if (resetSpeedTimers[deck] !== null) {
+        clearInterval(resetSpeedTimers[deck]);
+        resetSpeedTimers[deck] = null;
+      }
+    }
+
     function setSpeed(deck, rate) {
       const val = parseFloat(rate);
       const valBtn = document.getElementById(`rate-val-${deck.toLowerCase()}`);
@@ -2826,9 +2836,25 @@
     }
 
     function resetSpeed(deck) {
+      cancelResetSpeed(deck);
       const slider = document.getElementById(`rate-${deck.toLowerCase()}`);
-      if (slider) slider.value = '1';
-      setSpeed(deck, 1);
+      if (!slider) return;
+      let cur = parseFloat(slider.value) || 1;
+      if (Math.abs(cur - 1) < 0.01) {
+        slider.value = '1';
+        setSpeed(deck, 1);
+        return;
+      }
+      resetSpeedTimers[deck] = setInterval(() => {
+        const step = cur > 1 ? -0.05 : 0.05;
+        cur = +(cur + step).toFixed(2);
+        if ((step < 0 && cur <= 1) || (step > 0 && cur >= 1)) {
+          cur = 1;
+          cancelResetSpeed(deck);
+        }
+        slider.value = String(cur);
+        setSpeed(deck, cur);
+      }, 280);
     }
 
     function resetCrossfader() {
@@ -3069,10 +3095,10 @@
       else if (code === 'KeyP') triggerCue('B');
       else if (code === 'KeyL') togglePlay('B');
       else if (code === 'KeyT') toggleTalkDuck();
-      else if (code === 'KeyZ' && !e.repeat) nudgeSpeed('A', 0.75, 'down');
-      else if (code === 'KeyX' && !e.repeat) nudgeSpeed('A', 1.25, 'up');
-      else if (code === 'KeyN' && !e.repeat) nudgeSpeed('B', 0.75, 'down');
-      else if (code === 'KeyM' && !e.repeat) nudgeSpeed('B', 1.25, 'up');
+      else if (code === 'KeyZ' && !e.repeat) nudgeSpeed('A', -0.10, 'down');
+      else if (code === 'KeyX' && !e.repeat) nudgeSpeed('A', 0.10, 'up');
+      else if (code === 'KeyN' && !e.repeat) nudgeSpeed('B', -0.10, 'down');
+      else if (code === 'KeyM' && !e.repeat) nudgeSpeed('B', 0.10, 'up');
       else if (code === 'Digit1' || code === 'Numpad1') jumpHotCue('A', 1);
       else if (code === 'Digit2' || code === 'Numpad2') jumpHotCue('A', 2);
       else if (code === 'Digit3' || code === 'Numpad3') jumpHotCue('A', 3);
