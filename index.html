@@ -360,6 +360,15 @@
       inset: 0;
       width: 100%;
       height: 100%;
+      z-index: 2;
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #player-a-shadow,
+    #player-b-shadow {
+      z-index: 1;
+      opacity: 0;
+      pointer-events: none;
     }
     .video-lock-overlay {
       position: absolute;
@@ -683,7 +692,31 @@
       font-weight: 700;
     }
     .btn-loop.active {
-      background: #8b5cf6;
+      background: #7c3aed;
+      color: #ffffff;
+      font-weight: 700;
+    }
+    .loop-fade-pills {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 5px;
+    }
+    .loop-fade-pill {
+      padding: 6px 4px;
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+    }
+    .loop-fade-pill:hover {
+      background: var(--surface-elevated);
+      color: var(--text);
+    }
+    .loop-fade-pill.is-selected {
+      background: #7c3aed;
+      border-color: #a78bfa;
       color: #ffffff;
       font-weight: 700;
     }
@@ -1568,6 +1601,7 @@
         </div>
         <div class="video-wrapper">
           <div id="player-a"></div>
+          <div id="player-a-shadow"></div>
           <div class="video-lock-overlay" title="ล็อกวิดีโอไว้เพื่อกันคีย์ลัดหลุด (ปลดล็อกได้ที่ปุ่มใน Mixer)"></div>
         </div>
       </div>
@@ -1770,6 +1804,7 @@
         </div>
         <div class="video-wrapper">
           <div id="player-b"></div>
+          <div id="player-b-shadow"></div>
           <div class="video-lock-overlay" title="ล็อกวิดีโอไว้เพื่อกันคีย์ลัดหลุด (ปลดล็อกได้ที่ปุ่มใน Mixer)"></div>
         </div>
       </div>
@@ -2013,6 +2048,22 @@
         </div>
       </div>
 
+      <div class="adv-field">
+        <span style="display:flex; justify-content:space-between; align-items:center;">
+          <span>Crossfade Loop (Shadow Player)</span>
+          <span id="loop-fade-hint" style="font-family:var(--mono); font-size:0.75rem; color:#c4b5fd;">1.5s</span>
+        </span>
+        <div class="loop-fade-pills" id="loop-fade-pills">
+          <button type="button" class="loop-fade-pill" data-fade="0" onclick="selectLoopFade(0)">Off</button>
+          <button type="button" class="loop-fade-pill" data-fade="0.5" onclick="selectLoopFade(0.5)">0.5s</button>
+          <button type="button" class="loop-fade-pill" data-fade="1" onclick="selectLoopFade(1)">1s</button>
+          <button type="button" class="loop-fade-pill" data-fade="1.5" onclick="selectLoopFade(1.5)">1.5s</button>
+          <button type="button" class="loop-fade-pill" data-fade="2" onclick="selectLoopFade(2)">2s</button>
+          <button type="button" class="loop-fade-pill" data-fade="3" onclick="selectLoopFade(3)">3s</button>
+        </div>
+        <div style="font-size:0.75rem; color:var(--subtle); line-height:1.35;">ใช้ Player สำรองซ่อนด้านหลังเพื่อ fade เสียง+ภาพซ้อนหากัน (Loop สั้นกว่า 1.2s จะตัดกลับปกติ)</div>
+      </div>
+
       <div class="adv-actions">
         <button onclick="clearLoopFromModal()" style="background:transparent; color:var(--muted);">ล้าง Loop</button>
         <button id="loop-apply-btn" onclick="applyLoopModal()" style="background:#7c3aed; color:#fff; font-weight:700; padding:8px 18px;">เริ่ม Loop</button>
@@ -2023,11 +2074,22 @@
   <script src="https://www.youtube.com/iframe_api"></script>
   <script>
     const players = { A: null, B: null };
+    const deckSlots = { A: [null, null], B: [null, null] };
+    const activeSlot = { A: 0, B: 0 };
+    const slotVideoIds = { A: ['0UmE0QH-AA0', ''], B: ['fxViBvmTM_o', ''] };
+    const shadowState = {
+      A: { ready: false, creating: false, loading: false, priming: false, primeTimer: null, cueTimer: null },
+      B: { ready: false, creating: false, loading: false, priming: false, primeTimer: null, cueTimer: null }
+    };
+    const loopFade = {
+      A: { active: false, phase: 'idle', startAt: 0, durMs: 0, outSlot: 0, inSlot: 1, outGain: 1, inGain: 0, rafId: null, prerollAt: 0 },
+      B: { active: false, phase: 'idle', startAt: 0, durMs: 0, outSlot: 0, inSlot: 1, outGain: 1, inGain: 0, rafId: null, prerollAt: 0 }
+    };
     const cuePoints = { A: 0, B: 0 };
     const hotCues = { A: { 1: null, 2: null, 3: null }, B: { 1: null, 2: null, 3: null } };
     const loopState = {
-      A: { active: false, armed: false, start: 0, length: 0, lastJumpAt: 0 },
-      B: { active: false, armed: false, start: 0, length: 0, lastJumpAt: 0 }
+      A: { active: false, armed: false, start: 0, length: 0, lastJumpAt: 0, fadeSec: 1.5 },
+      B: { active: false, armed: false, start: 0, length: 0, lastJumpAt: 0, fadeSec: 1.5 }
     };
     const tapTimes = { A: [], B: [] };
 
@@ -2074,17 +2136,19 @@
     function onYouTubeIframeAPIReady() {
       if (ytReadyInitialized) return;
       ytReadyInitialized = true;
-      players.A = new YT.Player('player-a', {
+      deckSlots.A[0] = new YT.Player('player-a', {
         videoId: '0UmE0QH-AA0',
         playerVars: { controls: 0, disablekb: 1, rel: 0 },
-        events: { onReady: () => { updateVolumes(); if (bpmCache['0UmE0QH-AA0']) setDeckBpm('A', bpmCache['0UmE0QH-AA0']); loadSavedLoopForTrack('A', '0UmE0QH-AA0'); } }
+        events: { onReady: () => { applyDeckSlotVisuals('A'); updateVolumes(); if (bpmCache['0UmE0QH-AA0']) setDeckBpm('A', bpmCache['0UmE0QH-AA0']); loadSavedLoopForTrack('A', '0UmE0QH-AA0'); } }
       });
+      players.A = deckSlots.A[0];
 
-      players.B = new YT.Player('player-b', {
+      deckSlots.B[0] = new YT.Player('player-b', {
         videoId: 'fxViBvmTM_o',
         playerVars: { controls: 0, disablekb: 1, rel: 0 },
-        events: { onReady: () => { updateVolumes(); if (bpmCache['fxViBvmTM_o']) setDeckBpm('B', bpmCache['fxViBvmTM_o']); loadSavedLoopForTrack('B', 'fxViBvmTM_o'); } }
+        events: { onReady: () => { applyDeckSlotVisuals('B'); updateVolumes(); if (bpmCache['fxViBvmTM_o']) setDeckBpm('B', bpmCache['fxViBvmTM_o']); loadSavedLoopForTrack('B', 'fxViBvmTM_o'); } }
       });
+      players.B = deckSlots.B[0];
 
       setInterval(tickEngine, 200);
       setInterval(tickLoop, 50);
@@ -2245,6 +2309,7 @@
         document.getElementById(`cue-status-${deck.toLowerCase()}`).innerText = `CUE: ${formatTime(seconds)}`;
         
         deckLoadedIds[deck] = videoId;
+        slotVideoIds[deck][activeSlot[deck]] = videoId;
         urlInput.value = '';
         swapVinylDisc(deck, videoId);
         players[deck].cueVideoById(videoId, seconds);
@@ -2418,7 +2483,11 @@
       const state = loopState[deck];
       const vid = getDeckVideoId(deck);
       if (!vid || !state || state.length <= 0) return;
-      loopCache[vid] = { start: +state.start.toFixed(2), length: +state.length.toFixed(2) };
+      loopCache[vid] = {
+        start: +state.start.toFixed(2),
+        length: +state.length.toFixed(2),
+        fadeSec: state.fadeSec !== undefined ? +Number(state.fadeSec).toFixed(2) : 1.5
+      };
       safeStorageSet('yt_dj_loop_cache', loopCache);
       renderQueue();
     }
@@ -2428,6 +2497,7 @@
       if (saved && saved.length > 0) {
         loopState[deck].start = saved.start;
         loopState[deck].length = saved.length;
+        loopState[deck].fadeSec = saved.fadeSec !== undefined ? saved.fadeSec : 1.5;
         loopState[deck].active = false;
         loopState[deck].armed = false;
       } else {
@@ -2435,6 +2505,244 @@
         loopState[deck].length = 0;
       }
       updateLoopVisual(deck);
+    }
+
+    function getDeckRate(deck) {
+      const el = document.getElementById(`rate-${deck.toLowerCase()}`);
+      return el ? (parseFloat(el.value) || 1) : 1;
+    }
+
+    function getEffectiveLoopFadeSec(deck) {
+      const state = loopState[deck];
+      if (!state || !state.fadeSec || state.fadeSec <= 0 || state.length < 1.2) return 0;
+      return Math.min(state.fadeSec, +(state.length * 0.45).toFixed(2));
+    }
+
+    function applyDeckSlotVisuals(deck, crossfadeProgress = null) {
+      const curSlot = activeSlot[deck];
+      const shSlot = 1 - curSlot;
+      const curP = deckSlots[deck][curSlot];
+      const shP = deckSlots[deck][shSlot];
+      const curEl = curP && curP.getIframe ? curP.getIframe() : null;
+      const shEl = shP && shP.getIframe ? shP.getIframe() : null;
+
+      if (crossfadeProgress === null) {
+        if (curEl) {
+          curEl.style.zIndex = '2';
+          curEl.style.opacity = '1';
+          curEl.style.pointerEvents = 'auto';
+        }
+        if (shEl) {
+          shEl.style.zIndex = '1';
+          shEl.style.opacity = '0';
+          shEl.style.pointerEvents = 'none';
+        }
+      } else {
+        const lf = loopFade[deck];
+        const outP = deckSlots[deck][lf.outSlot];
+        const inP = deckSlots[deck][lf.inSlot];
+        const outEl = outP && outP.getIframe ? outP.getIframe() : null;
+        const inEl = inP && inP.getIframe ? inP.getIframe() : null;
+        if (outEl) {
+          outEl.style.zIndex = '2';
+          outEl.style.opacity = '1';
+          outEl.style.pointerEvents = 'none';
+        }
+        if (inEl) {
+          inEl.style.zIndex = '3';
+          inEl.style.opacity = String(Math.max(0, Math.min(1, crossfadeProgress)).toFixed(3));
+          inEl.style.pointerEvents = 'none';
+        }
+      }
+    }
+
+    function cancelLoopFade(deck, pauseShadow = true) {
+      const lf = loopFade[deck];
+      if (lf.rafId !== null) {
+        cancelAnimationFrame(lf.rafId);
+        lf.rafId = null;
+      }
+      lf.active = false;
+      lf.phase = 'idle';
+      lf.outGain = 1;
+      lf.inGain = 0;
+
+      const ss = shadowState[deck];
+      if (ss.primeTimer) { clearInterval(ss.primeTimer); ss.primeTimer = null; }
+      if (ss.cueTimer) { clearInterval(ss.cueTimer); ss.cueTimer = null; }
+      ss.priming = false;
+
+      if (pauseShadow) {
+        const shSlot = 1 - activeSlot[deck];
+        const sp = deckSlots[deck][shSlot];
+        if (sp) {
+          if (sp.setVolume) sp.setVolume(0);
+          if (sp.pauseVideo) sp.pauseVideo();
+        }
+      }
+      applyDeckSlotVisuals(deck);
+      updateVolumes();
+    }
+
+    function parkShadowAtLoopStart(deck, primeAudio = false) {
+      const state = loopState[deck];
+      const ss = shadowState[deck];
+      const shSlot = 1 - activeSlot[deck];
+      const sp = deckSlots[deck][shSlot];
+      if (!sp || !sp.seekTo) return;
+
+      if (ss.primeTimer) { clearInterval(ss.primeTimer); ss.primeTimer = null; }
+      ss.priming = false;
+
+      const startSec = state.start || 0;
+      if (sp.setPlaybackRate) sp.setPlaybackRate(getDeckRate(deck));
+      if (sp.setVolume) sp.setVolume(0);
+
+      if (!primeAudio || !state.active || getEffectiveLoopFadeSec(deck) <= 0) {
+        if (sp.pauseVideo) sp.pauseVideo();
+        sp.seekTo(startSec, true);
+        return;
+      }
+
+      ss.priming = true;
+      if (sp.unMute) sp.unMute();
+      if (sp.setVolume) sp.setVolume(0);
+      sp.seekTo(startSec, true);
+      if (sp.playVideo) sp.playVideo();
+
+      const startedAt = performance.now();
+      ss.primeTimer = setInterval(() => {
+        const elapsed = performance.now() - startedAt;
+        if (!loopState[deck].active || getEffectiveLoopFadeSec(deck) <= 0) {
+          clearInterval(ss.primeTimer);
+          ss.primeTimer = null;
+          ss.priming = false;
+          if (sp.setVolume) sp.setVolume(0);
+          if (sp.pauseVideo) sp.pauseVideo();
+          return;
+        }
+        const st = sp.getPlayerState ? sp.getPlayerState() : -1;
+        if (st === YT.PlayerState.PLAYING || elapsed >= 850) {
+          clearInterval(ss.primeTimer);
+          ss.primeTimer = null;
+          setTimeout(() => {
+            ss.priming = false;
+            if (!loopFade[deck].active && loopFade[deck].phase === 'idle') {
+              if (sp.setVolume) sp.setVolume(0);
+              if (sp.pauseVideo) sp.pauseVideo();
+              if (sp.seekTo) sp.seekTo(loopState[deck].start || 0, true);
+            }
+          }, st === YT.PlayerState.PLAYING ? 90 : 0);
+        }
+      }, 45);
+    }
+
+    function prepareLoopShadow(deck, primeAudio = false) {
+      const state = loopState[deck];
+      if (!state || !state.active || getEffectiveLoopFadeSec(deck) <= 0) return;
+      const vid = getDeckVideoId(deck);
+      if (!vid) return;
+
+      const ss = shadowState[deck];
+      const shSlot = 1 - activeSlot[deck];
+      const existing = deckSlots[deck][shSlot];
+      const containerId = `player-${deck.toLowerCase()}-shadow`;
+
+      if (!existing && !ss.creating) {
+        ss.creating = true;
+        ss.ready = false;
+        slotVideoIds[deck][shSlot] = vid;
+        deckSlots[deck][shSlot] = new YT.Player(containerId, {
+          videoId: vid,
+          playerVars: { controls: 0, disablekb: 1, rel: 0, start: Math.floor(state.start || 0) },
+          events: {
+            onReady: () => {
+              ss.creating = false;
+              ss.ready = true;
+              applyDeckSlotVisuals(deck);
+              if (!loopState[deck].active || getEffectiveLoopFadeSec(deck) <= 0) {
+                const sp = deckSlots[deck][1 - activeSlot[deck]];
+                if (sp && sp.setVolume) sp.setVolume(0);
+                return;
+              }
+              parkShadowAtLoopStart(deck, true);
+            }
+          }
+        });
+        return;
+      }
+
+      if (!existing || ss.creating) return;
+
+      if (slotVideoIds[deck][shSlot] !== vid) {
+        if (ss.cueTimer) { clearInterval(ss.cueTimer); ss.cueTimer = null; }
+        ss.loading = true;
+        slotVideoIds[deck][shSlot] = vid;
+        if (existing.setVolume) existing.setVolume(0);
+        if (existing.cueVideoById) existing.cueVideoById({ videoId: vid, startSeconds: state.start || 0 });
+        const startedCueAt = performance.now();
+        ss.cueTimer = setInterval(() => {
+          const curVid = existing.getVideoData ? existing.getVideoData()?.video_id : '';
+          const st = existing.getPlayerState ? existing.getPlayerState() : -1;
+          if ((curVid === vid && st !== -1) || performance.now() - startedCueAt > 1800) {
+            clearInterval(ss.cueTimer);
+            ss.cueTimer = null;
+            ss.loading = false;
+            ss.ready = true;
+            parkShadowAtLoopStart(deck, primeAudio);
+          }
+        }, 60);
+      } else {
+        ss.ready = true;
+        parkShadowAtLoopStart(deck, primeAudio);
+      }
+    }
+
+    function startLoopCrossfade(deck, fadeSec) {
+      const lf = loopFade[deck];
+      if (lf.rafId !== null) {
+        cancelAnimationFrame(lf.rafId);
+        lf.rafId = null;
+      }
+      lf.active = true;
+      lf.phase = 'fading';
+      lf.startAt = performance.now();
+      lf.durMs = Math.max(250, fadeSec * 1000);
+      lf.outGain = 1;
+      lf.inGain = 0;
+
+      function stepFade(now) {
+        if (!loopState[deck].active || !lf.active) return;
+        const progress = Math.min((now - lf.startAt) / lf.durMs, 1);
+        lf.outGain = Math.cos(progress * Math.PI * 0.5);
+        lf.inGain = Math.sin(progress * Math.PI * 0.5);
+        updateVolumes();
+        applyDeckSlotVisuals(deck, progress);
+
+        if (progress < 1) {
+          lf.rafId = requestAnimationFrame(stepFade);
+        } else {
+          lf.rafId = null;
+          lf.active = false;
+          lf.phase = 'idle';
+          lf.outGain = 1;
+          lf.inGain = 0;
+
+          activeSlot[deck] = lf.inSlot;
+          players[deck] = deckSlots[deck][activeSlot[deck]];
+          loopState[deck].lastJumpAt = performance.now();
+
+          const oldP = deckSlots[deck][lf.outSlot];
+          if (oldP) {
+            if (oldP.setVolume) oldP.setVolume(0);
+            if (oldP.pauseVideo) oldP.pauseVideo();
+            if (oldP.seekTo) oldP.seekTo(loopState[deck].start || 0, true);
+          }
+          applyDeckSlotVisuals(deck);
+          updateVolumes();
+        }
+      }
+      lf.rafId = requestAnimationFrame(stepFade);
     }
 
     function updateLoopVisual(deck) {
@@ -2452,7 +2760,7 @@
         if (state.armed) {
           btn.innerText = 'OUT?';
         } else if (state.active) {
-          btn.innerText = 'LOOPED';
+          btn.innerText = getEffectiveLoopFadeSec(deck) > 0 ? 'XFADE' : 'LOOPED';
         } else {
           btn.innerText = 'LOOP';
         }
@@ -2498,6 +2806,9 @@
           state.lastJumpAt = performance.now();
           p.seekTo(state.start, true);
           saveDeckLoopCache(deck);
+          if (getEffectiveLoopFadeSec(deck) > 0) {
+            prepareLoopShadow(deck, true);
+          }
         } else {
           clearLoop(deck);
           return;
@@ -2513,6 +2824,7 @@
       const state = loopState[deck];
       const p = players[deck];
       if (!p || !p.seekTo) return;
+      cancelLoopFade(deck, true);
       if (!state.active && !state.armed) {
         if (state.length > 0) {
           state.active = true;
@@ -2528,16 +2840,30 @@
         updateVolumes();
         p.playVideo();
       }
+      if (getEffectiveLoopFadeSec(deck) > 0) {
+        prepareLoopShadow(deck, true);
+      }
     }
 
     function clearLoop(deck, wipeLength = false) {
       loopState[deck].active = false;
       loopState[deck].armed = false;
       if (wipeLength) loopState[deck].length = 0;
+      cancelLoopFade(deck, true);
       updateLoopVisual(deck);
     }
 
     let loopModalDeck = 'A';
+    let loopModalFadeSec = 1.5;
+
+    function selectLoopFade(sec) {
+      loopModalFadeSec = sec;
+      document.querySelectorAll('#loop-fade-pills .loop-fade-pill').forEach(btn => {
+        btn.classList.toggle('is-selected', parseFloat(btn.dataset.fade) === sec);
+      });
+      const hint = document.getElementById('loop-fade-hint');
+      if (hint) hint.innerText = sec > 0 ? `${sec}s` : 'Off';
+    }
 
     function formatTimeDec(sec) {
       sec = Math.max(0, sec);
@@ -2559,6 +2885,7 @@
       document.getElementById('loop-modal-title').innerText = `LOOP EDITOR · DECK ${deck}`;
       document.getElementById('loop-in-input').value = formatTimeDec(inVal);
       document.getElementById('loop-out-input').value = formatTimeDec(outVal);
+      selectLoopFade(state.fadeSec !== undefined ? state.fadeSec : 1.5);
       const applyBtn = document.getElementById('loop-apply-btn');
       if (applyBtn) applyBtn.innerText = state.active ? 'บันทึก & ปิด' : 'เริ่ม Loop';
       document.getElementById('loop-edit-modal').classList.add('open');
@@ -2575,6 +2902,9 @@
       const outSec = Math.max(inSec + 0.4, parseTimeInput(document.getElementById('loop-out-input').value));
       state.start = inSec;
       state.length = +(outSec - inSec).toFixed(2);
+      if (!loopFade[loopModalDeck].active && loopFade[loopModalDeck].phase === 'idle' && getEffectiveLoopFadeSec(loopModalDeck) > 0) {
+        parkShadowAtLoopStart(loopModalDeck, false);
+      }
       updateLoopVisual(loopModalDeck);
       saveDeckLoopCache(loopModalDeck);
     }
@@ -2625,7 +2955,9 @@
       state.active = true;
       state.start = inSec;
       state.length = +(outSec - inSec).toFixed(2);
+      state.fadeSec = loopModalFadeSec;
       state.lastJumpAt = performance.now();
+      cancelLoopFade(loopModalDeck, true);
 
       const p = players[loopModalDeck];
       if (p && p.seekTo) {
@@ -2639,6 +2971,9 @@
           updateVolumes();
           p.playVideo();
         }
+      }
+      if (getEffectiveLoopFadeSec(loopModalDeck) > 0) {
+        prepareLoopShadow(loopModalDeck, true);
       }
       updateLoopVisual(loopModalDeck);
       saveDeckLoopCache(loopModalDeck);
@@ -2661,11 +2996,56 @@
       ['A', 'B'].forEach(deck => {
         const state = loopState[deck];
         const p = players[deck];
+        const lf = loopFade[deck];
         if (!state.active || !p || !p.getCurrentTime || !p.getPlayerState) return;
+        if (lf.active) return;
         if (p.getPlayerState() !== YT.PlayerState.PLAYING) return;
 
         const cur = p.getCurrentTime();
-        if (cur >= state.start + state.length && (now - state.lastJumpAt) > 300) {
+        const outPos = state.start + state.length;
+        const fadeSec = getEffectiveLoopFadeSec(deck);
+        const shSlot = 1 - activeSlot[deck];
+        const sp = deckSlots[deck][shSlot];
+        const ss = shadowState[deck];
+        const canShadow = fadeSec > 0 && sp && sp.playVideo && sp.getPlayerState && ss.ready && !ss.loading && !ss.priming && slotVideoIds[deck][shSlot] === getDeckVideoId(deck);
+
+        if (canShadow) {
+          const rate = getDeckRate(deck);
+          const fadeLeadVideoSec = fadeSec * rate;
+          const triggerPos = outPos - fadeLeadVideoSec;
+          const prerollPos = triggerPos - 0.22 * rate;
+
+          if (lf.phase === 'idle' && cur >= prerollPos && (now - state.lastJumpAt) > 400) {
+            lf.phase = 'preroll';
+            lf.prerollAt = now;
+            lf.outSlot = activeSlot[deck];
+            lf.inSlot = shSlot;
+            if (sp.setPlaybackRate) sp.setPlaybackRate(rate);
+            if (sp.getCurrentTime && Math.abs(sp.getCurrentTime() - state.start) > 0.35) {
+              if (sp.seekTo) sp.seekTo(state.start, true);
+            }
+            if (sp.unMute) sp.unMute();
+            if (sp.setVolume) sp.setVolume(0);
+            sp.playVideo();
+          }
+
+          if (lf.phase === 'preroll') {
+            const spState = sp.getPlayerState();
+            if (spState === YT.PlayerState.PLAYING || cur >= triggerPos) {
+              if (cur >= outPos + 0.15 && spState !== YT.PlayerState.PLAYING) {
+                cancelLoopFade(deck, true);
+                state.lastJumpAt = now;
+                p.seekTo(state.start, true);
+              } else {
+                const remainSec = Math.max(0.25, (outPos - cur) / rate);
+                startLoopCrossfade(deck, Math.min(fadeSec, remainSec));
+              }
+            }
+          }
+          return;
+        }
+
+        if (cur >= outPos && (now - state.lastJumpAt) > 300) {
           state.lastJumpAt = now;
           // Brief micro-fade dip (~90ms) to soften YouTube seek jump
           if (p.getVolume && p.setVolume) {
@@ -2760,6 +3140,21 @@
       dial.addEventListener('dblclick', () => applyVal(100));
     }
 
+    function setDeckAudioLevel(deck, vol) {
+      const lf = loopFade[deck];
+      if (lf && lf.active) {
+        const outP = deckSlots[deck][lf.outSlot];
+        const inP = deckSlots[deck][lf.inSlot];
+        if (outP && outP.setVolume) outP.setVolume(Math.round(vol * lf.outGain));
+        if (inP && inP.setVolume) inP.setVolume(Math.round(vol * lf.inGain));
+      } else {
+        const curP = players[deck];
+        const shP = deckSlots[deck][1 - activeSlot[deck]];
+        if (curP && curP.setVolume) curP.setVolume(vol);
+        if (shP && shP.setVolume) shP.setVolume(0);
+      }
+    }
+
     function updateVolumes() {
       const cf = parseFloat(document.getElementById('crossfader').value);
       const chA = parseFloat(document.getElementById('ch-vol-a').value);
@@ -2783,8 +3178,8 @@
       const finalVolA = Math.round(chA * gainA * masterScale);
       const finalVolB = Math.round(chB * gainB * masterScale);
 
-      if (players.A && players.A.setVolume) players.A.setVolume(finalVolA);
-      if (players.B && players.B.setVolume) players.B.setVolume(finalVolB);
+      setDeckAudioLevel('A', finalVolA);
+      setDeckAudioLevel('B', finalVolB);
 
       const lampA = document.getElementById('deck-lamp-a');
       const lampB = document.getElementById('deck-lamp-b');
@@ -3401,9 +3796,17 @@
     function togglePlay(deck) {
       const p = players[deck];
       if (!p || !p.getPlayerState) return;
-      if (p.unMute) p.unMute();
-      updateVolumes();
-      p.getPlayerState() === YT.PlayerState.PLAYING ? p.pauseVideo() : p.playVideo();
+      if (p.getPlayerState() === YT.PlayerState.PLAYING) {
+        cancelLoopFade(deck, true);
+        p.pauseVideo();
+      } else {
+        if (p.unMute) p.unMute();
+        updateVolumes();
+        p.playVideo();
+        if (loopState[deck].active && getEffectiveLoopFadeSec(deck) > 0) {
+          prepareLoopShadow(deck, true);
+        }
+      }
     }
 
     function parseTimeInput(str) {
@@ -3471,9 +3874,11 @@
       const val = parseFloat(rate);
       const valBtn = document.getElementById(`rate-val-${deck.toLowerCase()}`);
       if (valBtn) valBtn.innerText = `${val.toFixed(2)}x`;
-      if (players[deck] && players[deck].setPlaybackRate) {
-        players[deck].setPlaybackRate(val);
-      }
+      deckSlots[deck].forEach(slotP => {
+        if (slotP && slotP.setPlaybackRate) {
+          slotP.setPlaybackRate(val);
+        }
+      });
     }
 
     function stepSpeed(deck, delta) {
@@ -3604,8 +4009,8 @@
           const finalVolA = Math.round(chA * gainA * masterScale);
           const finalVolB = Math.round(chB * gainB * masterScale);
 
-          if (players.A && players.A.setVolume) players.A.setVolume(finalVolA);
-          if (players.B && players.B.setVolume) players.B.setVolume(finalVolB);
+          setDeckAudioLevel('A', finalVolA);
+          setDeckAudioLevel('B', finalVolB);
           const lampA = document.getElementById('deck-lamp-a');
           const lampB = document.getElementById('deck-lamp-b');
           if (lampA) lampA.style.setProperty('--vol', (finalVolA / 100).toFixed(3));
