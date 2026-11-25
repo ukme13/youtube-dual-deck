@@ -414,6 +414,26 @@
       outline: none;
       flex-shrink: 0;
     }
+    .btn-bpm-search {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #a1a1aa;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .btn-bpm-search:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.28);
+    }
     .btn-match-bpm {
       background: rgba(255, 255, 255, 0.08);
       border: 1px solid rgba(255, 255, 255, 0.16);
@@ -1495,6 +1515,9 @@
         <span class="deck-title-text" id="title-a" title="ชื่อคลิป">กำลังรอโหลดเพลง...</span>
         <button type="button" class="bpm-tag" id="bpm-a" onclick="openBpmEdit('A')" title="คลิกเพื่อพิมพ์ BPM เอง">-- BPM</button>
         <input type="number" class="bpm-edit-input" id="bpm-input-a" min="40" max="240" step="1" placeholder="BPM" style="display:none;" onkeydown="handleBpmInputKey(event, 'A')" onblur="commitBpmEdit('A')">
+        <button type="button" class="btn-bpm-search" onclick="searchBpmOnline('A')" title="ค้นหา BPM เพลงนี้บน Google">
+          <span class="material-symbols-rounded" style="font-size:13px;">search</span>
+        </button>
       </div>
       <div class="video-stage">
         <div class="side-vinyl" id="side-vinyl-a" title="คลิกเพื่อ Play/Pause หรือลากหมุนเพื่อสแครชเดินหน้า/ถอยหลัง">
@@ -1691,6 +1714,9 @@
         <span class="deck-title-text" id="title-b" title="ชื่อคลิป">กำลังรอโหลดเพลง...</span>
         <button type="button" class="bpm-tag" id="bpm-b" onclick="openBpmEdit('B')" title="คลิกเพื่อพิมพ์ BPM เอง">-- BPM</button>
         <input type="number" class="bpm-edit-input" id="bpm-input-b" min="40" max="240" step="1" placeholder="BPM" style="display:none;" onkeydown="handleBpmInputKey(event, 'B')" onblur="commitBpmEdit('B')">
+        <button type="button" class="btn-bpm-search" onclick="searchBpmOnline('B')" title="ค้นหา BPM เพลงนี้บน Google">
+          <span class="material-symbols-rounded" style="font-size:13px;">search</span>
+        </button>
       </div>
       <div class="video-stage">
         <div class="side-vinyl" id="side-vinyl-b" title="คลิกเพื่อ Play/Pause หรือลากหมุนเพื่อสแครชเดินหน้า/ถอยหลัง">
@@ -3506,6 +3532,7 @@
             if (titleEl && titleEl.innerText !== vData.title) {
               titleEl.innerText = vData.title;
               titleEl.title = vData.title;
+              if (vData.video_id) lookupOnlineBpm(deck, vData.video_id, vData.title);
             }
           }
           if (vData && vData.video_id) {
@@ -3635,9 +3662,93 @@
       }
     });
 
-    // --- Auto BPM Detection via Tab Audio (Web Audio API) ---
+    // --- Online BPM Lookup (Deezer JSONP + 1-Click Search) & Tab Audio Auto BPM ---
     let bpmCache = safeStorageGet('yt_dj_bpm_cache', {});
     const deckBpms = { A: null, B: null };
+    const bpmLookupTried = new Set();
+    let jsonpSeq = 0;
+
+    function cleanTrackTitleForBpm(title) {
+      return String(title || '')
+        .replace(/\[[^\]]*\]/g, ' ')
+        .replace(/\([^)]*(?:official|mv|music video|lyric|audio|live|hd|4k|ver\.?|version)[^)]*\)/gi, ' ')
+        .replace(/\b(?:official\s*(?:music\s*)?(?:video|mv|audio)|lyric\s*video|visualizer|full\s*song)\b/gi, ' ')
+        .replace(/\s*[|•·]\s*.*$/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function jsonpRequest(url, timeoutMs = 5000) {
+      return new Promise((resolve, reject) => {
+        const cbName = `__djJsonp_${++jsonpSeq}_${Date.now()}`;
+        const script = document.createElement('script');
+        let done = false;
+        const cleanup = () => {
+          clearTimeout(timer);
+          delete window[cbName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+        };
+        const timer = setTimeout(() => {
+          if (done) return;
+          done = true;
+          cleanup();
+          reject(new Error('timeout'));
+        }, timeoutMs);
+        window[cbName] = (data) => {
+          if (done) return;
+          done = true;
+          cleanup();
+          resolve(data);
+        };
+        script.onerror = () => {
+          if (done) return;
+          done = true;
+          cleanup();
+          reject(new Error('error'));
+        };
+        const sep = url.includes('?') ? '&' : '?';
+        script.src = `${url}${sep}output=jsonp&callback=${cbName}`;
+        document.head.appendChild(script);
+      });
+    }
+
+    async function lookupOnlineBpm(deck, videoId, rawTitle) {
+      if (!videoId || bpmCache[videoId] || deckBpms[deck] || bpmLookupTried.has(videoId)) return;
+      bpmLookupTried.add(videoId);
+      const q = cleanTrackTitleForBpm(rawTitle);
+      if (!q || q.length < 2) return;
+      try {
+        const searchRes = await jsonpRequest(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=3`);
+        const list = searchRes && Array.isArray(searchRes.data) ? searchRes.data : [];
+        for (const item of list.slice(0, 3)) {
+          if (!item || !item.id) continue;
+          const track = await jsonpRequest(`https://api.deezer.com/track/${item.id}`);
+          const bpm = track && typeof track.bpm === 'number' ? Math.round(track.bpm) : 0;
+          if (bpm >= 40 && bpm <= 240) {
+            const p = players[deck];
+            const curId = p && typeof p.getVideoData === 'function' ? p.getVideoData()?.video_id : '';
+            if ((!curId || curId === videoId) && !deckBpms[deck]) {
+              setDeckBpm(deck, bpm, videoId);
+            }
+            return;
+          }
+        }
+      } catch (e) {
+        // Silent fallback: user can still 1-click search, edit, or use AUTO BPM
+      }
+    }
+
+    function searchBpmOnline(deck) {
+      const titleEl = document.getElementById(`title-${deck.toLowerCase()}`);
+      const raw = titleEl ? titleEl.innerText.trim() : '';
+      if (!raw || raw === 'กำลังรอโหลดเพลง...' || raw.startsWith('กำลังโหลด')) {
+        alert('กรุณาโหลดเพลงก่อนกดค้นหา BPM ครับ');
+        return;
+      }
+      const q = cleanTrackTitleForBpm(raw) || raw;
+      window.open(`https://www.google.com/search?q=${encodeURIComponent(q + ' bpm')}`, '_blank', 'noopener');
+    }
+
     function setDeckBpm(deck, bpm, videoId = '') {
       deckBpms[deck] = bpm;
       const bpmEl = document.getElementById(`bpm-${deck.toLowerCase()}`);
@@ -3738,7 +3849,7 @@
         const src = ctx.createMediaStreamSource(stream);
         const filter = ctx.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.value = 220;
+        filter.frequency.value = 400;
         filter.Q.value = 0.7;
 
         const analyser = ctx.createAnalyser();
@@ -3775,8 +3886,8 @@
       else startBpmCapture();
     }
 
-    function estimateBpmFromIntervals(intervals) {
-      if (intervals.length < 4) return null;
+    function estimateBpmFromIntervals(intervals, minCount = 4) {
+      if (intervals.length < minCount) return null;
       const counts = new Map();
       for (const ms of intervals) {
         let bpm = 60000 / ms;
@@ -3835,8 +3946,8 @@
       const data = autoBpmState.dataArray;
       autoBpmState.analyser.getByteFrequencyData(data);
       let energy = 0;
-      for (let i = 0; i < 16; i++) energy += data[i] * data[i];
-      energy = Math.sqrt(energy / 16);
+      for (let i = 0; i < 24; i++) energy += data[i] * data[i];
+      energy = Math.sqrt(energy / 24);
 
       const hist = autoBpmState.energyHistory;
       hist.push(energy);
@@ -3844,15 +3955,17 @@
       if (hist.length < 10) return;
 
       const avg = hist.reduce((a, b) => a + b, 0) / hist.length;
-      const threshold = Math.max(avg * 1.18, 12);
+      const variance = hist.reduce((s, v) => s + (v - avg) * (v - avg), 0) / hist.length;
+      const stdDev = Math.sqrt(variance);
+      const threshold = avg + Math.max(stdDev * 1.15, avg * 0.08, 2.5);
 
-      if (energy > threshold && now - autoBpmState.lastPeakTime > 240) {
+      if (energy > threshold && now - autoBpmState.lastPeakTime > 220) {
         if (autoBpmState.lastPeakTime > 0) {
           const delta = now - autoBpmState.lastPeakTime;
-          if (delta >= 240 && delta <= 1500) {
+          if (delta >= 220 && delta <= 1500) {
             autoBpmState.intervals.push(delta);
             updateAutoBpmUI(true, `${deck}: ${Math.min(8, autoBpmState.intervals.length)}/8`);
-            const liveBpm = estimateBpmFromIntervals(autoBpmState.intervals);
+            const liveBpm = estimateBpmFromIntervals(autoBpmState.intervals, 4);
             if (liveBpm) {
               setDeckBpm(deck, liveBpm, '');
             }
@@ -3862,8 +3975,8 @@
       }
 
       const elapsed = autoBpmState.listenStartTime ? now - autoBpmState.listenStartTime : 0;
-      if (autoBpmState.intervals.length >= 8 || (elapsed > 8500 && autoBpmState.intervals.length >= 4)) {
-        const finalBpm = estimateBpmFromIntervals(autoBpmState.intervals);
+      if (autoBpmState.intervals.length >= 8 || (elapsed > 8500 && autoBpmState.intervals.length >= 2)) {
+        const finalBpm = estimateBpmFromIntervals(autoBpmState.intervals, 2);
         if (finalBpm) setDeckBpm(deck, finalBpm, curId);
         stopBpmCapture();
         return;
