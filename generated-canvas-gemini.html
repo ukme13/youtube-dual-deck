@@ -1018,23 +1018,27 @@
     }
     .queue-form {
       display: grid;
-      grid-template-columns: 1.4fr 2fr 104px 128px auto;
+      grid-template-columns: 1.4fr 2fr 104px auto auto;
       gap: 6px;
     }
-    .queue-select {
+    .btn-q-fade {
       background: var(--surface-elevated);
-      border: 1px solid transparent;
-      color: var(--text);
-      padding: 8px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--muted);
+      padding: 8px 12px;
       border-radius: 999px;
       font-size: 0.78rem;
-      outline: none;
-      cursor: pointer;
+      font-family: var(--mono);
+      gap: 6px;
+      white-space: nowrap;
     }
-    .queue-select:focus {
-      background: var(--surface-hover);
-      border-color: var(--border-strong);
+    .btn-q-fade:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-q-fade.is-active {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: var(--accent);
+      color: #ffffff;
     }
+    .btn-q-fade.is-active .seg-dot { background: var(--accent); }
     @media (max-width: 768px) {
       .queue-form { grid-template-columns: 1fr; }
     }
@@ -1604,16 +1608,9 @@
       <input type="text" id="q-title" placeholder="ชื่อเพลง / โน้ตสั้นๆ">
       <input type="text" id="q-url" placeholder="วางลิงก์ YouTube / YouTube Music" onkeydown="if(event.key==='Enter') addToQueue()">
       <input type="text" id="q-cue" placeholder="Cue (0:45)" style="font-family:monospace; text-align:center;" onkeydown="if(event.key==='Enter') addToQueue()">
-      <select id="q-fade" class="queue-select" title="รูปแบบ Crossfade เมื่อถึงเพลงนี้ (Default = ใช้ค่าจาก Fader)">
-        <option value="">Fade: Default</option>
-        <option value="cut">Jump (Cut 0s)</option>
-        <option value="1">Fade 1s</option>
-        <option value="2">Fade 2s</option>
-        <option value="4">Fade 4s</option>
-        <option value="6">Fade 6s</option>
-        <option value="8">Fade 8s</option>
-        <option value="10">Fade 10s</option>
-      </select>
+      <button type="button" id="btn-q-fade" class="btn-q-fade" onclick="openFadeModal('queue-new')" title="ตั้งค่า Crossfade เฉพาะเพลงนี้ (กดอีกครั้งเพื่อรีเซ็ตกลับ Default)">
+        <span class="seg-dot"></span><span id="q-fade-label">Fade</span>
+      </button>
       <button onclick="addToQueue()" style="background:var(--accent); border:none; color:#000; font-weight:700;">+ เพิ่มเข้าคิว</button>
     </div>
 
@@ -1650,7 +1647,7 @@
   <div class="modal-backdrop" id="fade-adv-modal" onclick="if(event.target===this) closeFadeModal()">
     <div class="adv-modal" role="dialog" aria-label="Fader Advanced Settings">
       <div class="adv-modal-header">
-        <span style="display:inline-flex; align-items:center; gap:6px;"><span class="material-symbols-rounded" style="color:var(--accent);">tune</span> CROSSFADE CURVE &amp; TIMING</span>
+        <span style="display:inline-flex; align-items:center; gap:6px;"><span class="material-symbols-rounded" style="color:var(--accent);">tune</span> <span id="adv-modal-title">CROSSFADE CURVE &amp; TIMING</span></span>
         <button class="btn-del" onclick="closeFadeModal()" title="ปิด"><span class="material-symbols-rounded" style="font-size:18px;">close</span></button>
       </div>
 
@@ -1697,7 +1694,7 @@
         </div>
       </div>
 
-      <div class="adv-field">
+      <div class="adv-field" id="adv-law-group">
         <span>Crossfade Law</span>
         <div class="law-row">
           <button class="law-opt is-selected" data-law="power" onclick="selectFadeLaw('power')">
@@ -1709,23 +1706,23 @@
         </div>
       </div>
 
-      <div class="adv-row-3">
-        <label class="adv-field">
-          <span style="color:#93c5fd;">Fade → A (s)</span>
+      <div class="adv-row-3" id="adv-timing-row">
+        <label class="adv-field" id="adv-field-a">
+          <span id="adv-label-a" style="color:#93c5fd;">Fade → A (s)</span>
           <input type="number" id="adv-fade-a" min="0" max="30" step="0.5" value="4" oninput="refreshFadeGraph()">
         </label>
-        <label class="adv-field">
+        <label class="adv-field" id="adv-field-b">
           <span style="color:#fda4af;">Fade → B (s)</span>
           <input type="number" id="adv-fade-b" min="0" max="30" step="0.5" value="4" oninput="refreshFadeGraph()">
         </label>
-        <label class="adv-field">
+        <label class="adv-field" id="adv-field-next">
           <span>Auto-Next (s)</span>
           <input type="number" id="adv-auto-next-sec" min="2" max="45" step="1" value="10">
         </label>
       </div>
 
       <div class="adv-actions">
-        <button onclick="resetFadeSettings()" style="background:transparent; color:var(--muted);">รีเซ็ตค่าเริ่มต้น</button>
+        <button id="adv-reset-btn" onclick="resetFadeSettings()" style="background:transparent; color:var(--muted);">รีเซ็ตค่าเริ่มต้น</button>
         <button onclick="applyFadeSettings()" style="background:var(--accent); color:#000; font-weight:700; padding:8px 18px;">บันทึก</button>
       </div>
     </div>
@@ -2317,8 +2314,13 @@
       if (fillA) fillA.setAttribute('d', `${dA} L${W} ${padTop + H} L0 ${padTop + H} Z`);
       if (fillB) fillB.setAttribute('d', `${dB} L${W} ${padTop + H} L0 ${padTop + H} Z`);
 
-      if (legA) legA.innerText = `Fade → A (${tA}s)`;
-      if (legB) legB.innerText = `Fade → B (${tB}s)`;
+      if (fadeModalTarget === 'global') {
+        if (legA) legA.innerText = `Fade → A (${tA}s)`;
+        if (legB) legB.innerText = `Fade → B (${tB}s)`;
+      } else {
+        if (legA) legA.innerText = `Fade In (${tA}s)`;
+        if (legB) legB.innerText = curve === 'cut' ? 'Instant Cut' : `${tA}s`;
+      }
       if (desc) {
         const names = { smooth: 'Smooth', linear: 'Linear', fast: 'Fast In', slow: 'Slow Tail', cut: 'Hard Cut' };
         desc.innerText = `${names[curve] || 'Smooth'} · ${law === 'linear' ? 'Equal Gain' : 'Equal Power'}`;
@@ -2331,12 +2333,61 @@
       drawFadeGraph(selCurve ? selCurve.dataset.curve : 'smooth', selLaw ? selLaw.dataset.law : 'power');
     }
 
-    function openFadeModal() {
-      document.getElementById('adv-fade-a').value = fadeSettings.timeA;
-      document.getElementById('adv-fade-b').value = fadeSettings.timeB;
-      document.getElementById('adv-auto-next-sec').value = fadeSettings.autoNextSec;
-      selectFadeCurve(fadeSettings.curve);
-      selectFadeLaw(fadeSettings.law || 'power');
+    let fadeModalTarget = 'global';
+    let pendingQueueFade = null;
+
+    function formatFadeLabel(f) {
+      if (!f) return 'Fade';
+      if (f === 'cut' || f.curve === 'cut' || f.time === 0) return 'JUMP';
+      if (typeof f === 'number') return `${f}s`;
+      return `${f.time}s`;
+    }
+
+    function syncQueueFadeBtn() {
+      const btn = document.getElementById('btn-q-fade');
+      const lbl = document.getElementById('q-fade-label');
+      if (!btn || !lbl) return;
+      btn.classList.toggle('is-active', pendingQueueFade !== null);
+      lbl.innerText = formatFadeLabel(pendingQueueFade);
+    }
+
+    function openFadeModal(target = 'global') {
+      fadeModalTarget = target;
+      const isGlobal = target === 'global';
+      const titleEl = document.getElementById('adv-modal-title');
+      const lawGroup = document.getElementById('adv-law-group');
+      const fieldB = document.getElementById('adv-field-b');
+      const fieldNext = document.getElementById('adv-field-next');
+      const labelA = document.getElementById('adv-label-a');
+      const resetBtn = document.getElementById('adv-reset-btn');
+      const timingRow = document.getElementById('adv-timing-row');
+
+      if (lawGroup) lawGroup.style.display = isGlobal ? '' : 'none';
+      if (fieldB) fieldB.style.display = isGlobal ? '' : 'none';
+      if (fieldNext) fieldNext.style.display = isGlobal ? '' : 'none';
+      if (timingRow) timingRow.style.gridTemplateColumns = isGlobal ? 'repeat(3, 1fr)' : '1fr';
+
+      if (isGlobal) {
+        if (titleEl) titleEl.innerText = 'CROSSFADE CURVE & TIMING';
+        if (labelA) { labelA.innerText = 'Fade → A (s)'; labelA.style.color = '#93c5fd'; }
+        if (resetBtn) resetBtn.innerText = 'รีเซ็ตค่าเริ่มต้น';
+        document.getElementById('adv-fade-a').value = fadeSettings.timeA;
+        document.getElementById('adv-fade-b').value = fadeSettings.timeB;
+        document.getElementById('adv-auto-next-sec').value = fadeSettings.autoNextSec;
+        selectFadeCurve(fadeSettings.curve);
+        selectFadeLaw(fadeSettings.law || 'power');
+      } else {
+        const existing = target === 'queue-new' ? pendingQueueFade : (trackQueue[target] ? trackQueue[target].fadeIn : null);
+        const curTime = existing && typeof existing === 'object' ? existing.time : (existing === 'cut' ? 0 : (typeof existing === 'number' ? existing : fadeSettings.timeA));
+        const curCurve = existing && typeof existing === 'object' ? existing.curve : (existing === 'cut' ? 'cut' : fadeSettings.curve);
+        if (titleEl) titleEl.innerText = 'TRACK FADE-IN OVERRIDE';
+        if (labelA) { labelA.innerText = 'Fade In (วินาที)'; labelA.style.color = '#ffffff'; }
+        if (resetBtn) resetBtn.innerText = 'ใช้ค่า Default';
+        document.getElementById('adv-fade-a').value = curTime;
+        document.getElementById('adv-fade-b').value = curTime;
+        selectFadeCurve(curCurve);
+        selectFadeLaw(fadeSettings.law || 'power');
+      }
       document.getElementById('fade-adv-modal').classList.add('open');
     }
 
@@ -2362,26 +2413,47 @@
 
     function applyFadeSettings() {
       const tA = Math.max(0, Math.min(30, parseFloat(document.getElementById('adv-fade-a').value) || 0));
-      const tB = Math.max(0, Math.min(30, parseFloat(document.getElementById('adv-fade-b').value) || 0));
-      const nextSec = Math.max(2, Math.min(45, parseInt(document.getElementById('adv-auto-next-sec').value, 10) || 10));
       const selectedCurveBtn = document.querySelector('.curve-opt.is-selected');
-      const selectedLawBtn = document.querySelector('.law-opt.is-selected');
       const curve = selectedCurveBtn ? selectedCurveBtn.dataset.curve : 'smooth';
-      const law = selectedLawBtn ? selectedLawBtn.dataset.law : 'power';
 
-      fadeSettings = { timeA: tA, timeB: tB, curve, law, autoNextSec: nextSec, advActive: true };
-      safeStorageSet('yt_dj_fade_settings', fadeSettings);
-      updateVolumes();
-      syncFadeUI();
+      if (fadeModalTarget === 'global') {
+        const tB = Math.max(0, Math.min(30, parseFloat(document.getElementById('adv-fade-b').value) || 0));
+        const nextSec = Math.max(2, Math.min(45, parseInt(document.getElementById('adv-auto-next-sec').value, 10) || 10));
+        const selectedLawBtn = document.querySelector('.law-opt.is-selected');
+        const law = selectedLawBtn ? selectedLawBtn.dataset.law : 'power';
+
+        fadeSettings = { timeA: tA, timeB: tB, curve, law, autoNextSec: nextSec, advActive: true };
+        safeStorageSet('yt_dj_fade_settings', fadeSettings);
+        updateVolumes();
+        syncFadeUI();
+      } else if (fadeModalTarget === 'queue-new') {
+        pendingQueueFade = { time: tA, curve };
+        syncQueueFadeBtn();
+      } else if (typeof fadeModalTarget === 'number' && trackQueue[fadeModalTarget]) {
+        trackQueue[fadeModalTarget].fadeIn = { time: tA, curve };
+        saveQueue();
+        renderQueue();
+      }
       closeFadeModal();
     }
 
     function resetFadeSettings() {
-      fadeSettings = { timeA: 4, timeB: 4, curve: 'smooth', law: 'power', autoNextSec: 10, advActive: false };
-      safeStorageSet('yt_dj_fade_settings', fadeSettings);
-      updateVolumes();
-      openFadeModal();
-      syncFadeUI();
+      if (fadeModalTarget === 'global') {
+        fadeSettings = { timeA: 4, timeB: 4, curve: 'smooth', law: 'power', autoNextSec: 10, advActive: false };
+        safeStorageSet('yt_dj_fade_settings', fadeSettings);
+        updateVolumes();
+        openFadeModal('global');
+        syncFadeUI();
+      } else if (fadeModalTarget === 'queue-new') {
+        pendingQueueFade = null;
+        syncQueueFadeBtn();
+        closeFadeModal();
+      } else if (typeof fadeModalTarget === 'number' && trackQueue[fadeModalTarget]) {
+        trackQueue[fadeModalTarget].fadeIn = null;
+        saveQueue();
+        renderQueue();
+        closeFadeModal();
+      }
     }
 
     // --- Track Queue ---
@@ -2438,15 +2510,12 @@
       const titleInput = document.getElementById('q-title');
       const urlInput = document.getElementById('q-url');
       const cueInput = document.getElementById('q-cue');
-      const fadeSelect = document.getElementById('q-fade');
       const rawUrl = urlInput.value.trim();
       if (!rawUrl) return;
 
       const videoId = extractVideoId(rawUrl);
       const userTitle = titleInput.value.trim();
       const cueSec = parseTimeInput(cueInput.value);
-      const rawFade = fadeSelect ? fadeSelect.value : '';
-      const fadeIn = rawFade === 'cut' ? 'cut' : (rawFade !== '' ? parseFloat(rawFade) : null);
       const itemId = Date.now();
 
       const item = {
@@ -2455,7 +2524,7 @@
         url: rawUrl,
         videoId: videoId,
         cueStr: formatTime(cueSec),
-        fadeIn: fadeIn,
+        fadeIn: pendingQueueFade,
         hotCues: null
       };
 
@@ -2465,7 +2534,8 @@
       titleInput.value = '';
       urlInput.value = '';
       cueInput.value = '';
-      if (fadeSelect) fadeSelect.value = '';
+      pendingQueueFade = null;
+      syncQueueFadeBtn();
 
       if (!userTitle && /^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
         fetchVideoTitle(videoId).then(fetched => {
@@ -2631,9 +2701,13 @@
           : '';
         const hcCount = item.hotCues ? Object.values(item.hotCues).filter(v => v !== null).length : 0;
         const hcTag = hcCount > 0 ? `<span class="queue-cue-tag" style="color:#93c5fd; background:rgba(59,130,246,0.14);">HC×${hcCount}</span>` : '';
-        const fadeTag = item.fadeIn === 'cut'
-          ? `<span class="queue-cue-tag" style="color:#fda4af; background:rgba(244,63,94,0.14);">JUMP</span>`
-          : (typeof item.fadeIn === 'number' ? `<span class="queue-cue-tag" style="color:#fde68a; background:rgba(245,158,11,0.14);">FADE ${item.fadeIn}s</span>` : '');
+        const f = item.fadeIn;
+        const isCut = f === 'cut' || (f && typeof f === 'object' && (f.curve === 'cut' || f.time === 0));
+        const fadeTag = f
+          ? (isCut
+            ? `<button type="button" class="queue-cue-tag" style="color:#fda4af; background:rgba(244,63,94,0.14); border:none; cursor:pointer;" onclick="openFadeModal(${idx})" title="คลิกเพื่อแก้ไข Fade">JUMP</button>`
+            : `<button type="button" class="queue-cue-tag" style="color:#fde68a; background:rgba(245,158,11,0.14); border:none; cursor:pointer;" onclick="openFadeModal(${idx})" title="คลิกเพื่อแก้ไข Fade">FADE ${typeof f === 'object' ? f.time : f}s</button>`)
+          : `<button type="button" class="queue-cue-tag" style="color:var(--muted); background:rgba(255,255,255,0.06); border:none; cursor:pointer;" onclick="openFadeModal(${idx})" title="คลิกเพื่อตั้งค่า Fade เฉพาะเพลงนี้">+ FADE</button>`;
         const isNext = idx === queueCursor;
         return `
         <div class="queue-item${isNext ? ' is-next' : ''}"
@@ -2763,8 +2837,13 @@
       const startValue = parseFloat(slider.value);
       const override = deckFadeOverride[targetDeck];
       let duration = 0;
+      let activeCurve = fadeSettings.curve;
       if (override === 'cut') {
         duration = 0;
+        activeCurve = 'cut';
+      } else if (override && typeof override === 'object') {
+        activeCurve = override.curve || fadeSettings.curve;
+        duration = activeCurve === 'cut' ? 0 : (override.time * 1000);
       } else if (typeof override === 'number' && !isNaN(override)) {
         duration = override * 1000;
       } else {
@@ -2808,7 +2887,7 @@
       function animate(currentTime) {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
-        const ease = easeCurve(progress, fadeSettings.curve);
+        const ease = evalFadeEase(progress, activeCurve);
 
         slider.value = startValue + (targetValue - startValue) * ease;
         updateVolumes();
