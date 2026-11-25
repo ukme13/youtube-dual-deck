@@ -2085,8 +2085,8 @@
       B: { ready: false, creating: false, loading: false, priming: false, primeTimer: null, cueTimer: null }
     };
     const loopFade = {
-      A: { active: false, phase: 'idle', startAt: 0, durMs: 0, outSlot: 0, inSlot: 1, outGain: 1, inGain: 0, rafId: null, prerollAt: 0 },
-      B: { active: false, phase: 'idle', startAt: 0, durMs: 0, outSlot: 0, inSlot: 1, outGain: 1, inGain: 0, rafId: null, prerollAt: 0 }
+      A: { active: false, phase: 'idle', startAt: 0, durMs: 0, outSlot: 0, inSlot: 1, outGain: 1, inGain: 0, rafId: null, timerId: null, prerollAt: 0 },
+      B: { active: false, phase: 'idle', startAt: 0, durMs: 0, outSlot: 0, inSlot: 1, outGain: 1, inGain: 0, rafId: null, timerId: null, prerollAt: 0 }
     };
     const cuePoints = { A: 0, B: 0 };
     const hotCues = { A: { 1: null, 2: null, 3: null }, B: { 1: null, 2: null, 3: null } };
@@ -2097,6 +2097,7 @@
     const tapTimes = { A: [], B: [] };
 
     let fadeAnimationId = null;
+    let fadeBackupIntervalId = null;
     let duckAnimationId = null;
     let isDucking = false;
     let preDuckMasterVol = 100;
@@ -2565,6 +2566,10 @@
         cancelAnimationFrame(lf.rafId);
         lf.rafId = null;
       }
+      if (lf.timerId !== null) {
+        clearInterval(lf.timerId);
+        lf.timerId = null;
+      }
       lf.active = false;
       lf.phase = 'idle';
       lf.outGain = 1;
@@ -2701,11 +2706,53 @@
       }
     }
 
+    function stepLoopCrossfade(deck, now) {
+      const lf = loopFade[deck];
+      if (!loopState[deck].active || !lf.active) return;
+      const progress = Math.min((now - lf.startAt) / lf.durMs, 1);
+      lf.outGain = Math.cos(progress * Math.PI * 0.5);
+      lf.inGain = Math.sin(progress * Math.PI * 0.5);
+      updateVolumes();
+      applyDeckSlotVisuals(deck, progress);
+
+      if (progress >= 1) {
+        if (lf.rafId !== null) {
+          cancelAnimationFrame(lf.rafId);
+          lf.rafId = null;
+        }
+        if (lf.timerId !== null) {
+          clearInterval(lf.timerId);
+          lf.timerId = null;
+        }
+        lf.active = false;
+        lf.phase = 'idle';
+        lf.outGain = 1;
+        lf.inGain = 0;
+
+        activeSlot[deck] = lf.inSlot;
+        players[deck] = deckSlots[deck][activeSlot[deck]];
+        loopState[deck].lastJumpAt = performance.now();
+
+        const oldP = deckSlots[deck][lf.outSlot];
+        if (oldP) {
+          if (oldP.setVolume) oldP.setVolume(0);
+          if (oldP.pauseVideo) oldP.pauseVideo();
+          if (oldP.seekTo) oldP.seekTo(loopState[deck].start || 0, true);
+        }
+        applyDeckSlotVisuals(deck);
+        updateVolumes();
+      }
+    }
+
     function startLoopCrossfade(deck, fadeSec) {
       const lf = loopFade[deck];
       if (lf.rafId !== null) {
         cancelAnimationFrame(lf.rafId);
         lf.rafId = null;
+      }
+      if (lf.timerId !== null) {
+        clearInterval(lf.timerId);
+        lf.timerId = null;
       }
       lf.active = true;
       lf.phase = 'fading';
@@ -2714,38 +2761,17 @@
       lf.outGain = 1;
       lf.inGain = 0;
 
-      function stepFade(now) {
+      function rafStep(now) {
         if (!loopState[deck].active || !lf.active) return;
-        const progress = Math.min((now - lf.startAt) / lf.durMs, 1);
-        lf.outGain = Math.cos(progress * Math.PI * 0.5);
-        lf.inGain = Math.sin(progress * Math.PI * 0.5);
-        updateVolumes();
-        applyDeckSlotVisuals(deck, progress);
-
-        if (progress < 1) {
-          lf.rafId = requestAnimationFrame(stepFade);
-        } else {
-          lf.rafId = null;
-          lf.active = false;
-          lf.phase = 'idle';
-          lf.outGain = 1;
-          lf.inGain = 0;
-
-          activeSlot[deck] = lf.inSlot;
-          players[deck] = deckSlots[deck][activeSlot[deck]];
-          loopState[deck].lastJumpAt = performance.now();
-
-          const oldP = deckSlots[deck][lf.outSlot];
-          if (oldP) {
-            if (oldP.setVolume) oldP.setVolume(0);
-            if (oldP.pauseVideo) oldP.pauseVideo();
-            if (oldP.seekTo) oldP.seekTo(loopState[deck].start || 0, true);
-          }
-          applyDeckSlotVisuals(deck);
-          updateVolumes();
+        stepLoopCrossfade(deck, now);
+        if (lf.active) {
+          lf.rafId = requestAnimationFrame(rafStep);
         }
       }
-      lf.rafId = requestAnimationFrame(stepFade);
+      lf.rafId = requestAnimationFrame(rafStep);
+      lf.timerId = setInterval(() => {
+        if (lf.active) stepLoopCrossfade(deck, performance.now());
+      }, 80);
     }
 
     function updateLoopVisual(deck) {
@@ -3047,7 +3073,10 @@
         const p = players[deck];
         const lf = loopFade[deck];
         if (!state.active || !p || !p.getCurrentTime || !p.getPlayerState) return;
-        if (lf.active) return;
+        if (lf.active) {
+          stepLoopCrossfade(deck, now);
+          return;
+        }
         if (p.getPlayerState() !== YT.PlayerState.PLAYING) return;
 
         const cur = p.getCurrentTime();
@@ -3062,7 +3091,14 @@
           const rate = getDeckRate(deck);
           const fadeLeadVideoSec = fadeSec * rate;
           const triggerPos = outPos - fadeLeadVideoSec;
-          const prerollPos = triggerPos - 0.22 * rate;
+          const prerollPos = triggerPos - (document.hidden ? 0.85 : 0.22) * rate;
+
+          if (cur >= outPos + 0.15) {
+            cancelLoopFade(deck, true);
+            state.lastJumpAt = now;
+            p.seekTo(state.start, true);
+            return;
+          }
 
           if (lf.phase === 'idle' && cur >= prerollPos && (now - state.lastJumpAt) > 400) {
             lf.phase = 'preroll';
@@ -3080,14 +3116,15 @@
 
           if (lf.phase === 'preroll') {
             const spState = sp.getPlayerState();
-            if (spState === YT.PlayerState.PLAYING || cur >= triggerPos) {
-              if (cur >= outPos + 0.15 && spState !== YT.PlayerState.PLAYING) {
-                cancelLoopFade(deck, true);
+            if (spState === YT.PlayerState.PLAYING) {
+              const remainSec = Math.max(0.25, (outPos - cur) / rate);
+              startLoopCrossfade(deck, Math.min(fadeSec, remainSec));
+            } else if ((now - lf.prerollAt) > 550 || cur >= outPos) {
+              // Shadow stalled (e.g. background tab throttling): rescue with clean jump
+              cancelLoopFade(deck, true);
+              if (cur >= outPos) {
                 state.lastJumpAt = now;
                 p.seekTo(state.start, true);
-              } else {
-                const remainSec = Math.max(0.25, (outPos - cur) / rate);
-                startLoopCrossfade(deck, Math.min(fadeSec, remainSec));
               }
             }
           }
@@ -3108,6 +3145,10 @@
         }
       });
     }
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) tickLoop();
+    });
 
     // --- Rotary Knobs & Master Volume / Auto-Ducking ---
     const KNOB_ARC_LEN = 113.1; // 270 deg of r=24
@@ -4009,7 +4050,7 @@
       const isIndependent = outDuration !== inDuration;
 
       function finishFade() {
-        fadeAnimationId = null;
+        cancelAutoFade();
         autoNextTriggered = false;
         const oldDeck = targetValue < 0 ? 'B' : 'A';
         clearLoop(oldDeck);
@@ -4035,7 +4076,10 @@
 
       const startTime = performance.now();
 
-      function animate(currentTime) {
+      let autoFadeRunning = true;
+
+      function stepAutoFade(currentTime) {
+        if (!autoFadeRunning) return;
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / totalDuration, 1);
         const ease = evalFadeEase(progress, activeCurve);
@@ -4068,20 +4112,34 @@
           updateVolumes();
         }
 
-        if (progress < 1) {
-          fadeAnimationId = requestAnimationFrame(animate);
-        } else {
+        if (progress >= 1) {
+          autoFadeRunning = false;
           updateVolumes();
           finishFade();
         }
       }
-      fadeAnimationId = requestAnimationFrame(animate);
+
+      function rafStep(currentTime) {
+        stepAutoFade(currentTime);
+        if (autoFadeRunning && fadeAnimationId !== null) {
+          fadeAnimationId = requestAnimationFrame(rafStep);
+        }
+      }
+
+      fadeAnimationId = requestAnimationFrame(rafStep);
+      fadeBackupIntervalId = setInterval(() => {
+        if (autoFadeRunning) stepAutoFade(performance.now());
+      }, 80);
     }
 
     function cancelAutoFade() {
       if (fadeAnimationId !== null) {
         cancelAnimationFrame(fadeAnimationId);
         fadeAnimationId = null;
+      }
+      if (fadeBackupIntervalId !== null) {
+        clearInterval(fadeBackupIntervalId);
+        fadeBackupIntervalId = null;
       }
     }
 
