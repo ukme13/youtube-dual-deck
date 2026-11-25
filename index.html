@@ -359,13 +359,68 @@
       display: block;
     }
     .deck-title-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 2px 2px 0;
+    }
+    .deck-title-text {
       font-size: 0.84rem;
       font-weight: 600;
       color: var(--text);
-      padding: 2px 2px 0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
+      flex: 1;
+    }
+    .bpm-tag {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      color: #a1a1aa;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 2px 7px;
+      border-radius: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
+      transition: all 0.2s;
+    }
+    .bpm-tag.is-detected {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    .mixer-head-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      gap: 8px;
+    }
+    .btn-auto-bpm {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #d4d4d8;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s;
+      letter-spacing: 0.04em;
+    }
+    .btn-auto-bpm:hover { background: rgba(255, 255, 255, 0.12); color: #ffffff; }
+    .btn-auto-bpm.is-listening {
+      background: #ffffff;
+      color: #0b0b0b;
+      border-color: #ffffff;
     }
 
     /* Spotify-style thin range sliders */
@@ -1398,7 +1453,10 @@
         <input type="text" id="url-a" placeholder="วางลิงก์ YouTube / Shorts / Music หรือ Video ID">
         <button onclick="loadTrack('A')">Load</button>
       </div>
-      <div class="deck-title-bar" id="title-a" title="ชื่อคลิป">กำลังรอโหลดเพลง...</div>
+      <div class="deck-title-bar">
+        <span class="deck-title-text" id="title-a" title="ชื่อคลิป">กำลังรอโหลดเพลง...</span>
+        <span class="bpm-tag" id="bpm-a" title="จังหวะเพลง (BPM)">-- BPM</span>
+      </div>
       <div class="video-stage">
         <div class="side-vinyl" id="side-vinyl-a" title="คลิกเพื่อ Play/Pause หรือลากหมุนเพื่อสแครชเดินหน้า/ถอยหลัง">
           <div class="scratch-hud" id="scratch-hud-a">0.0s</div>
@@ -1471,7 +1529,13 @@
 
     <!-- MASTER MIXER -->
     <div class="mixer">
-      <div style="font-weight:700; color:var(--muted); font-size:0.74rem; letter-spacing:0.1em;">MASTER MIXER</div>
+      <div class="mixer-head-row">
+        <div style="font-weight:700; color:var(--muted); font-size:0.74rem; letter-spacing:0.1em;">MASTER MIXER</div>
+        <button class="btn-auto-bpm" id="btn-auto-bpm" onclick="toggleAutoBpm()" title="จับจังหวะ BPM อัตโนมัติจากเสียงแท็บเบราว์เซอร์ (คลิกเพื่อเปิด/ปิด)">
+          <span class="material-symbols-rounded" style="font-size:14px;">graphic_eq</span>
+          <span id="auto-bpm-label">AUTO BPM</span>
+        </button>
+      </div>
       
       <div class="knobs-row">
         <div class="knob-unit">
@@ -1585,7 +1649,10 @@
         <input type="text" id="url-b" placeholder="วางลิงก์ YouTube / Shorts / Music หรือ Video ID">
         <button onclick="loadTrack('B')">Load</button>
       </div>
-      <div class="deck-title-bar" id="title-b" title="ชื่อคลิป">กำลังรอโหลดเพลง...</div>
+      <div class="deck-title-bar">
+        <span class="deck-title-text" id="title-b" title="ชื่อคลิป">กำลังรอโหลดเพลง...</span>
+        <span class="bpm-tag" id="bpm-b" title="จังหวะเพลง (BPM)">-- BPM</span>
+      </div>
       <div class="video-stage">
         <div class="side-vinyl" id="side-vinyl-b" title="คลิกเพื่อ Play/Pause หรือลากหมุนเพื่อสแครชเดินหน้า/ถอยหลัง">
           <div class="scratch-hud" id="scratch-hud-b">0.0s</div>
@@ -3470,6 +3537,215 @@
         if (btn) btn.classList.remove('active');
       }
     });
+
+    // --- Auto BPM Detection via Tab Audio (Web Audio API) ---
+    const autoBpmState = {
+      active: false,
+      stream: null,
+      ctx: null,
+      analyser: null,
+      rafId: null,
+      dataArray: null,
+      energyHistory: [],
+      lastPeakTime: 0,
+      intervals: [],
+      lastTrackDeck: null,
+      lastTrackId: '',
+      lastReportTime: 0
+    };
+
+    function getActiveBpmDeck() {
+      const pA = players.A && typeof players.A.getPlayerState === 'function' ? players.A.getPlayerState() : -1;
+      const pB = players.B && typeof players.B.getPlayerState === 'function' ? players.B.getPlayerState() : -1;
+      const playA = pA === 1;
+      const playB = pB === 1;
+      if (playA && !playB) return 'A';
+      if (playB && !playA) return 'B';
+      if (playA && playB) {
+        const cf = parseFloat(document.getElementById('crossfader')?.value || 0);
+        return cf > 0 ? 'B' : 'A';
+      }
+      return null;
+    }
+
+    function updateAutoBpmUI(listening, labelText) {
+      const btn = document.getElementById('btn-auto-bpm');
+      const lbl = document.getElementById('auto-bpm-label');
+      if (btn) btn.classList.toggle('is-listening', listening);
+      if (lbl) lbl.innerText = labelText || (listening ? 'LISTENING' : 'AUTO BPM');
+    }
+
+    function stopBpmCapture() {
+      autoBpmState.active = false;
+      if (autoBpmState.rafId) {
+        cancelAnimationFrame(autoBpmState.rafId);
+        autoBpmState.rafId = null;
+      }
+      if (autoBpmState.stream) {
+        autoBpmState.stream.getTracks().forEach(t => t.stop());
+        autoBpmState.stream = null;
+      }
+      if (autoBpmState.ctx) {
+        autoBpmState.ctx.close().catch(() => {});
+        autoBpmState.ctx = null;
+      }
+      autoBpmState.analyser = null;
+      autoBpmState.dataArray = null;
+      autoBpmState.energyHistory = [];
+      autoBpmState.intervals = [];
+      updateAutoBpmUI(false, 'AUTO BPM');
+    }
+
+    async function startBpmCapture() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        alert('เบราว์เซอร์นี้ไม่รองรับการจับเสียงแท็บ (getDisplayMedia)');
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: { width: 1, height: 1, frameRate: 1 },
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+        });
+        const audioTracks = stream.getAudioTracks();
+        if (!audioTracks || audioTracks.length === 0) {
+          stream.getTracks().forEach(t => t.stop());
+          alert('ไม่พบสัญญาณเสียง — กรุณาเลือกแท็บนี้แล้วติ๊กถูก "แชร์เสียงแท็บ" (Share tab audio) ด้วยครับ');
+          return;
+        }
+        stream.getVideoTracks().forEach(t => t.stop());
+        audioTracks[0].onended = () => stopBpmCapture();
+
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioCtx();
+        const src = ctx.createMediaStreamSource(stream);
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 150;
+        filter.Q.value = 0.7;
+
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.15;
+
+        src.connect(filter);
+        filter.connect(analyser);
+
+        autoBpmState.active = true;
+        autoBpmState.stream = stream;
+        autoBpmState.ctx = ctx;
+        autoBpmState.analyser = analyser;
+        autoBpmState.dataArray = new Uint8Array(analyser.frequencyBinCount);
+        autoBpmState.energyHistory = [];
+        autoBpmState.intervals = [];
+        autoBpmState.lastPeakTime = 0;
+        autoBpmState.lastReportTime = 0;
+        updateAutoBpmUI(true, 'LISTENING');
+        detectBpmLoop();
+      } catch (err) {
+        stopBpmCapture();
+        const msg = String(err && err.message ? err.message : err || '');
+        if (window.self !== window.top && (err?.name === 'NotAllowedError' || msg.includes('display-capture') || msg.includes('permissions policy'))) {
+          alert('Google Sites iframe บล็อกการจับเสียงแท็บครับ — กรุณาเปิดใช้งาน Auto BPM ผ่านลิงก์ตรง GitHub Pages:\nhttps://ukme13.github.io/youtube-dual-deck/');
+        }
+      }
+    }
+
+    function toggleAutoBpm() {
+      if (autoBpmState.active) stopBpmCapture();
+      else startBpmCapture();
+    }
+
+    function estimateBpmFromIntervals(intervals) {
+      if (intervals.length < 6) return null;
+      const counts = new Map();
+      for (const ms of intervals) {
+        let bpm = 60000 / ms;
+        while (bpm < 70) bpm *= 2;
+        while (bpm > 160) bpm /= 2;
+        const rounded = Math.round(bpm);
+        counts.set(rounded, (counts.get(rounded) || 0) + 1);
+      }
+      let bestBpm = null;
+      let bestScore = -1;
+      for (const [cand] of counts) {
+        let score = 0;
+        for (let d = -2; d <= 2; d++) {
+          score += (counts.get(cand + d) || 0) * (3 - Math.abs(d));
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestBpm = cand;
+        }
+      }
+      if (bestBpm === null) return null;
+      let weightedSum = 0;
+      let weightTotal = 0;
+      for (let d = -2; d <= 2; d++) {
+        const c = counts.get(bestBpm + d) || 0;
+        weightedSum += (bestBpm + d) * c;
+        weightTotal += c;
+      }
+      return weightTotal > 0 ? Math.round(weightedSum / weightTotal) : bestBpm;
+    }
+
+    function detectBpmLoop() {
+      if (!autoBpmState.active || !autoBpmState.analyser) return;
+      autoBpmState.rafId = requestAnimationFrame(detectBpmLoop);
+
+      const deck = getActiveBpmDeck();
+      if (!deck) return;
+
+      const curId = (players[deck] && typeof players[deck].getVideoData === 'function')
+        ? (players[deck].getVideoData()?.video_id || '')
+        : '';
+      if (deck !== autoBpmState.lastTrackDeck || curId !== autoBpmState.lastTrackId) {
+        autoBpmState.lastTrackDeck = deck;
+        autoBpmState.lastTrackId = curId;
+        autoBpmState.intervals = [];
+        autoBpmState.energyHistory = [];
+        autoBpmState.lastPeakTime = 0;
+        updateAutoBpmUI(true, `${deck}: ...`);
+      }
+
+      const data = autoBpmState.dataArray;
+      autoBpmState.analyser.getByteFrequencyData(data);
+      let energy = 0;
+      for (let i = 0; i < 10; i++) energy += data[i] * data[i];
+      energy = Math.sqrt(energy / 10);
+
+      const hist = autoBpmState.energyHistory;
+      hist.push(energy);
+      if (hist.length > 43) hist.shift();
+      if (hist.length < 15) return;
+
+      const avg = hist.reduce((a, b) => a + b, 0) / hist.length;
+      const threshold = Math.max(avg * 1.32, 35);
+      const now = performance.now();
+
+      if (energy > threshold && now - autoBpmState.lastPeakTime > 260) {
+        if (autoBpmState.lastPeakTime > 0) {
+          const delta = now - autoBpmState.lastPeakTime;
+          if (delta >= 260 && delta <= 1500) {
+            autoBpmState.intervals.push(delta);
+            if (autoBpmState.intervals.length > 24) autoBpmState.intervals.shift();
+          }
+        }
+        autoBpmState.lastPeakTime = now;
+      }
+
+      if (now - autoBpmState.lastReportTime > 650 && autoBpmState.intervals.length >= 6) {
+        autoBpmState.lastReportTime = now;
+        const bpm = estimateBpmFromIntervals(autoBpmState.intervals);
+        if (bpm) {
+          const bpmEl = document.getElementById(`bpm-${deck.toLowerCase()}`);
+          if (bpmEl) {
+            bpmEl.innerText = `${bpm} BPM`;
+            bpmEl.classList.add('is-detected');
+          }
+          updateAutoBpmUI(true, `${deck}: ${bpm}`);
+        }
+      }
+    }
 
     setupVinylScratch('A');
     setupVinylScratch('B');
