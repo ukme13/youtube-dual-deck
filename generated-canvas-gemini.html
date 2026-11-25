@@ -1778,7 +1778,10 @@
       queueCursor = 0;
     }
 
+    let ytReadyInitialized = false;
     function onYouTubeIframeAPIReady() {
+      if (ytReadyInitialized) return;
+      ytReadyInitialized = true;
       players.A = new YT.Player('player-a', {
         videoId: '0UmE0QH-AA0',
         playerVars: { controls: 0, disablekb: 1, rel: 0 },
@@ -3077,6 +3080,10 @@
     setupKnob('knob-ch-b', 'ch-vol-b', false);
     updateVolumes();
     syncFadeUI();
+    renderQueue();
+    if (window.YT && window.YT.Player) {
+      onYouTubeIframeAPIReady();
+    }
   </script>
 </body>
 </html>
