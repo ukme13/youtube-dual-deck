@@ -1874,8 +1874,8 @@
       <div style="display:flex; gap:6px; flex-wrap:wrap;">
         <button onclick="saveDeckToQueue('A')" style="font-size:0.74rem; padding:4px 8px; color:#93c5fd;"><span class="material-symbols-rounded">playlist_add</span> Deck A</button>
         <button onclick="saveDeckToQueue('B')" style="font-size:0.74rem; padding:4px 8px; color:#fda4af;"><span class="material-symbols-rounded">playlist_add</span> Deck B</button>
-        <button onclick="exportQueue()" style="padding:5px 7px;" title="Export คิวเพลงเป็นไฟล์ JSON" aria-label="Export Queue"><span class="material-symbols-rounded" style="font-size:17px;">download</span></button>
-        <button onclick="document.getElementById('import-queue-file').click()" style="padding:5px 7px;" title="Import คิวเพลงจากไฟล์ JSON" aria-label="Import Queue"><span class="material-symbols-rounded" style="font-size:17px;">upload_file</span></button>
+        <button onclick="exportQueue()" style="padding:5px 7px;" title="Export คิวเพลง + การตั้งค่าทั้งหมด (Loop, BPM, Fade, Mixer) เป็นไฟล์ JSON" aria-label="Export Queue and Settings"><span class="material-symbols-rounded" style="font-size:17px;">download</span></button>
+        <button onclick="document.getElementById('import-queue-file').click()" style="padding:5px 7px;" title="Import คิวเพลง + การตั้งค่าทั้งหมดจากไฟล์ JSON" aria-label="Import Queue and Settings"><span class="material-symbols-rounded" style="font-size:17px;">upload_file</span></button>
         <input type="file" id="import-queue-file" accept=".json" style="display:none;" onchange="importQueue(event)">
         <button onclick="clearQueue()" style="padding:5px 7px; color:var(--muted);" title="ล้างคิวเพลงทั้งหมด" aria-label="Clear Queue"><span class="material-symbols-rounded" style="font-size:17px;">delete_sweep</span></button>
       </div>
@@ -3863,11 +3863,44 @@
     }
 
     function exportQueue() {
-      const blob = new Blob([JSON.stringify(trackQueue, null, 2)], { type: 'application/json' });
+      const snapshot = {
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        queue: trackQueue,
+        queueCursor: queueCursor,
+        loopCache: loopCache,
+        bpmCache: bpmCache,
+        fadeSettings: fadeSettings,
+        mixer: {
+          crossfader: parseFloat(document.getElementById('crossfader')?.value ?? 0),
+          chVolA: parseFloat(document.getElementById('ch-vol-a')?.value ?? 100),
+          chVolB: parseFloat(document.getElementById('ch-vol-b')?.value ?? 100),
+          masterVol: parseFloat(document.getElementById('master-vol')?.value ?? 100),
+          autoNext: Boolean(document.getElementById('auto-next-toggle')?.checked),
+          autoLoad: Boolean(document.getElementById('auto-load-toggle')?.checked),
+          videoLocked: Boolean(isVideoLocked)
+        },
+        decks: {}
+      };
+      ['A', 'B'].forEach(deck => {
+        const vid = getDeckVideoId(deck);
+        snapshot.decks[deck] = {
+          videoId: vid || '',
+          cue: cuePoints[deck] || 0,
+          hotCues: { ...hotCues[deck] },
+          rate: getDeckRate(deck),
+          bpm: deckBpms[deck] || null,
+          fadeOverride: deckFadeOverride[deck] ?? null,
+          loop: loopState[deck].length > 0
+            ? { start: +loopState[deck].start.toFixed(2), length: +loopState[deck].length.toFixed(2), fadeSec: loopState[deck].fadeSec ?? 1.5 }
+            : null
+        };
+      });
+      const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `yt-dj-queue-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `yt-dj-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -3879,12 +3912,129 @@
       reader.onload = (e) => {
         try {
           const parsed = JSON.parse(e.target.result);
+
+          // Backward compatibility: v1 raw array export
           if (Array.isArray(parsed)) {
             trackQueue = parsed;
             queueCursor = 0;
             saveQueue();
             renderQueue();
+            return;
           }
+
+          if (!parsed || typeof parsed !== 'object') {
+            alert('รูปแบบไฟล์ JSON ไม่ถูกต้องครับ');
+            return;
+          }
+
+          if (parsed.loopCache && typeof parsed.loopCache === 'object') {
+            loopCache = { ...loopCache, ...parsed.loopCache };
+            safeStorageSet('yt_dj_loop_cache', loopCache);
+          }
+
+          if (parsed.bpmCache && typeof parsed.bpmCache === 'object') {
+            bpmCache = { ...bpmCache, ...parsed.bpmCache };
+            safeStorageSet('yt_dj_bpm_cache', bpmCache);
+          }
+
+          if (parsed.fadeSettings && typeof parsed.fadeSettings === 'object') {
+            fadeSettings = { ...fadeSettings, ...parsed.fadeSettings };
+            if (!fadeSettings.law) fadeSettings.law = 'power';
+            safeStorageSet('yt_dj_fade_settings', fadeSettings);
+            syncFadeUI();
+          }
+
+          if (Array.isArray(parsed.queue)) {
+            trackQueue = parsed.queue;
+            const rawCursor = Number.isInteger(parsed.queueCursor) ? parsed.queueCursor : 0;
+            queueCursor = (rawCursor >= 0 && rawCursor < trackQueue.length) ? rawCursor : 0;
+            saveQueue();
+          }
+
+          if (parsed.mixer && typeof parsed.mixer === 'object') {
+            const m = parsed.mixer;
+            if (typeof m.crossfader === 'number') document.getElementById('crossfader').value = String(m.crossfader);
+            if (typeof m.chVolA === 'number') document.getElementById('ch-vol-a').value = String(m.chVolA);
+            if (typeof m.chVolB === 'number') document.getElementById('ch-vol-b').value = String(m.chVolB);
+            if (typeof m.masterVol === 'number') document.getElementById('master-vol').value = String(m.masterVol);
+
+            const autoNextCb = document.getElementById('auto-next-toggle');
+            const autoNextPad = document.getElementById('pad-auto-next');
+            if (typeof m.autoNext === 'boolean' && autoNextCb && autoNextPad) {
+              autoNextCb.checked = m.autoNext;
+              autoNextPad.classList.toggle('is-on', m.autoNext);
+            }
+
+            const autoLoadCb = document.getElementById('auto-load-toggle');
+            const autoLoadPad = document.getElementById('pad-auto-load');
+            if (typeof m.autoLoad === 'boolean' && autoLoadCb && autoLoadPad) {
+              autoLoadCb.checked = m.autoLoad;
+              autoLoadPad.classList.toggle('is-on', m.autoLoad);
+            }
+
+            if (typeof m.videoLocked === 'boolean' && m.videoLocked !== isVideoLocked) {
+              toggleVideoLock();
+            }
+            updateVolumes();
+          }
+
+          if (parsed.decks && typeof parsed.decks === 'object') {
+            ['A', 'B'].forEach(deck => {
+              const dCfg = parsed.decks[deck];
+              if (!dCfg || typeof dCfg !== 'object') return;
+              const d = deck.toLowerCase();
+
+              if (typeof dCfg.rate === 'number') {
+                cancelResetSpeed(deck);
+                const rateSlider = document.getElementById(`rate-${d}`);
+                if (rateSlider) rateSlider.value = String(dCfg.rate);
+                setSpeed(deck, dCfg.rate);
+              }
+
+              const currentVid = getDeckVideoId(deck);
+              if (dCfg.videoId && dCfg.videoId !== currentVid) {
+                if (dCfg.loop && dCfg.loop.length > 0 && !loopCache[dCfg.videoId]) {
+                  loopCache[dCfg.videoId] = dCfg.loop;
+                  safeStorageSet('yt_dj_loop_cache', loopCache);
+                }
+                if (typeof dCfg.bpm === 'number' && !bpmCache[dCfg.videoId]) {
+                  bpmCache[dCfg.videoId] = dCfg.bpm;
+                  safeStorageSet('yt_dj_bpm_cache', bpmCache);
+                }
+                loadTrack(deck, dCfg.videoId, dCfg.cue || 0, dCfg.hotCues || null, dCfg.fadeOverride ?? null);
+              } else {
+                if (typeof dCfg.cue === 'number') {
+                  cuePoints[deck] = dCfg.cue;
+                  document.getElementById(`cue-input-${d}`).value = dCfg.cue > 0 ? formatTime(dCfg.cue) : '';
+                  document.getElementById(`cue-status-${d}`).innerText = `CUE: ${formatTime(dCfg.cue)}`;
+                }
+                if (dCfg.hotCues && typeof dCfg.hotCues === 'object') {
+                  [1, 2, 3].forEach(slot => {
+                    hotCues[deck][slot] = dCfg.hotCues[slot] !== undefined ? dCfg.hotCues[slot] : null;
+                    updateHotCueUI(deck, slot);
+                  });
+                }
+                if (dCfg.fadeOverride !== undefined) deckFadeOverride[deck] = dCfg.fadeOverride;
+                if (typeof dCfg.bpm === 'number') setDeckBpm(deck, dCfg.bpm, currentVid);
+                if (dCfg.loop && dCfg.loop.length > 0 && !loopState[deck].active) {
+                  loopState[deck].start = dCfg.loop.start;
+                  loopState[deck].length = dCfg.loop.length;
+                  loopState[deck].fadeSec = dCfg.loop.fadeSec ?? 1.5;
+                  updateLoopVisual(deck);
+                } else if (currentVid) {
+                  loadSavedLoopForTrack(deck, currentVid);
+                }
+              }
+            });
+          } else {
+            ['A', 'B'].forEach(deck => {
+              const vid = getDeckVideoId(deck);
+              if (vid && bpmCache[vid] && !deckBpms[deck]) setDeckBpm(deck, bpmCache[vid]);
+              if (vid && !loopState[deck].active) loadSavedLoopForTrack(deck, vid);
+            });
+          }
+
+          renderQueue();
         } catch (err) {
           alert('ไฟล์ JSON ไม่ถูกต้องครับ');
         }
