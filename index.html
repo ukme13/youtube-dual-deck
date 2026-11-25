@@ -1641,9 +1641,9 @@
           <path id="cf-line-b" fill="none" stroke="#f43f5e" stroke-width="2.2" stroke-linecap="round"/>
         </svg>
         <div class="cf-graph-legend">
-          <span style="color:#93c5fd;">Deck A Out</span>
+          <span id="cf-legend-a" style="color:#93c5fd;">Fade → A (4s)</span>
           <span id="cf-graph-desc" style="color:var(--muted);">Smooth · Equal Power</span>
-          <span style="color:#fda4af;">Deck B In</span>
+          <span id="cf-legend-b" style="color:#fda4af;">Fade → B (4s)</span>
         </div>
       </div>
 
@@ -1688,11 +1688,11 @@
       <div class="adv-row-3">
         <label class="adv-field">
           <span style="color:#93c5fd;">Fade → A (s)</span>
-          <input type="number" id="adv-fade-a" min="0" max="30" step="0.5" value="4">
+          <input type="number" id="adv-fade-a" min="0" max="30" step="0.5" value="4" oninput="refreshFadeGraph()">
         </label>
         <label class="adv-field">
           <span style="color:#fda4af;">Fade → B (s)</span>
-          <input type="number" id="adv-fade-b" min="0" max="30" step="0.5" value="4">
+          <input type="number" id="adv-fade-b" min="0" max="30" step="0.5" value="4" oninput="refreshFadeGraph()">
         </label>
         <label class="adv-field">
           <span>Auto-Next (s)</span>
@@ -2253,7 +2253,15 @@
       const fillA = document.getElementById('cf-fill-a');
       const fillB = document.getElementById('cf-fill-b');
       const desc = document.getElementById('cf-graph-desc');
+      const legA = document.getElementById('cf-legend-a');
+      const legB = document.getElementById('cf-legend-b');
       if (!lineA || !lineB) return;
+
+      const rawA = parseFloat(document.getElementById('adv-fade-a')?.value);
+      const rawB = parseFloat(document.getElementById('adv-fade-b')?.value);
+      const tA = Number.isFinite(rawA) ? Math.max(0, rawA) : fadeSettings.timeA;
+      const tB = Number.isFinite(rawB) ? Math.max(0, rawB) : fadeSettings.timeB;
+      const maxSec = Math.max(tA, tB, 0.5);
 
       const W = 320, H = 84, padTop = 4;
       const steps = 64;
@@ -2261,9 +2269,13 @@
 
       for (let i = 0; i <= steps; i++) {
         const p = i / steps;
-        const t = evalFadeEase(p, curve);
-        const gA = law === 'linear' ? (1 - t) : Math.cos(t * 0.5 * Math.PI);
-        const gB = law === 'linear' ? t : Math.sin(t * 0.5 * Math.PI);
+        const sec = p * maxSec;
+        const pA = tA <= 0 ? 1 : Math.min(1, sec / tA);
+        const pB = tB <= 0 ? 1 : Math.min(1, sec / tB);
+        const eA = evalFadeEase(pA, curve);
+        const eB = evalFadeEase(pB, curve);
+        const gA = law === 'linear' ? (1 - eA) : Math.cos(eA * 0.5 * Math.PI);
+        const gB = law === 'linear' ? eB : Math.sin(eB * 0.5 * Math.PI);
         const x = (p * W).toFixed(1);
         const yA = (padTop + (1 - gA) * H).toFixed(1);
         const yB = (padTop + (1 - gB) * H).toFixed(1);
@@ -2278,10 +2290,18 @@
       if (fillA) fillA.setAttribute('d', `${dA} L${W} ${padTop + H} L0 ${padTop + H} Z`);
       if (fillB) fillB.setAttribute('d', `${dB} L${W} ${padTop + H} L0 ${padTop + H} Z`);
 
+      if (legA) legA.innerText = `Fade → A (${tA}s)`;
+      if (legB) legB.innerText = `Fade → B (${tB}s)`;
       if (desc) {
         const names = { smooth: 'Smooth', linear: 'Linear', fast: 'Fast In', slow: 'Slow Tail', cut: 'Hard Cut' };
         desc.innerText = `${names[curve] || 'Smooth'} · ${law === 'linear' ? 'Equal Gain' : 'Equal Power'}`;
       }
+    }
+
+    function refreshFadeGraph() {
+      const selCurve = document.querySelector('.curve-opt.is-selected');
+      const selLaw = document.querySelector('.law-opt.is-selected');
+      drawFadeGraph(selCurve ? selCurve.dataset.curve : 'smooth', selLaw ? selLaw.dataset.law : 'power');
     }
 
     function openFadeModal() {
