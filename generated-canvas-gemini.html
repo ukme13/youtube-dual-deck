@@ -2126,7 +2126,11 @@
         clearLoop(deck);
         tapTimes[deck] = [];
         const bpmEl = document.getElementById(`bpm-${deck.toLowerCase()}`);
-        if (bpmEl) bpmEl.innerText = '-- BPM';
+        const cachedBpm = bpmCache[videoId];
+        if (bpmEl) {
+          bpmEl.innerText = cachedBpm ? `${cachedBpm} BPM` : '-- BPM';
+          bpmEl.classList.toggle('is-detected', Boolean(cachedBpm));
+        }
         document.getElementById(`title-${deck.toLowerCase()}`).innerText = `กำลังโหลด [${videoId}]...`;
         autoNextTriggered = false;
 
@@ -3539,6 +3543,19 @@
     });
 
     // --- Auto BPM Detection via Tab Audio (Web Audio API) ---
+    let bpmCache = safeStorageGet('yt_dj_bpm_cache', {});
+    function setDeckBpm(deck, bpm, videoId = '') {
+      const bpmEl = document.getElementById(`bpm-${deck.toLowerCase()}`);
+      if (bpmEl) {
+        bpmEl.innerText = `${bpm} BPM`;
+        bpmEl.classList.add('is-detected');
+      }
+      if (videoId) {
+        bpmCache[videoId] = bpm;
+        safeStorageSet('yt_dj_bpm_cache', bpmCache);
+      }
+    }
+
     const autoBpmState = {
       active: false,
       stream: null,
@@ -3551,7 +3568,7 @@
       intervals: [],
       lastTrackDeck: null,
       lastTrackId: '',
-      lastReportTime: 0
+      listenStartTime: 0
     };
 
     function getActiveBpmDeck() {
@@ -3572,7 +3589,7 @@
       const btn = document.getElementById('btn-auto-bpm');
       const lbl = document.getElementById('auto-bpm-label');
       if (btn) btn.classList.toggle('is-listening', listening);
-      if (lbl) lbl.innerText = labelText || (listening ? 'LISTENING' : 'AUTO BPM');
+      if (lbl) lbl.innerText = labelText || (listening ? 'PLAY TRACK' : 'AUTO BPM');
     }
 
     function stopBpmCapture() {
@@ -3593,6 +3610,9 @@
       autoBpmState.dataArray = null;
       autoBpmState.energyHistory = [];
       autoBpmState.intervals = [];
+      autoBpmState.lastTrackDeck = null;
+      autoBpmState.lastTrackId = '';
+      autoBpmState.listenStartTime = 0;
       updateAutoBpmUI(false, 'AUTO BPM');
     }
 
@@ -3618,15 +3638,16 @@
 
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         const ctx = new AudioCtx();
+        if (ctx.state === 'suspended') await ctx.resume();
         const src = ctx.createMediaStreamSource(stream);
         const filter = ctx.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.value = 150;
+        filter.frequency.value = 220;
         filter.Q.value = 0.7;
 
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 1024;
-        analyser.smoothingTimeConstant = 0.15;
+        analyser.smoothingTimeConstant = 0.1;
 
         src.connect(filter);
         filter.connect(analyser);
@@ -3639,8 +3660,10 @@
         autoBpmState.energyHistory = [];
         autoBpmState.intervals = [];
         autoBpmState.lastPeakTime = 0;
-        autoBpmState.lastReportTime = 0;
-        updateAutoBpmUI(true, 'LISTENING');
+        autoBpmState.lastTrackDeck = null;
+        autoBpmState.lastTrackId = '';
+        autoBpmState.listenStartTime = 0;
+        updateAutoBpmUI(true, 'PLAY TRACK');
         detectBpmLoop();
       } catch (err) {
         stopBpmCapture();
@@ -3657,7 +3680,7 @@
     }
 
     function estimateBpmFromIntervals(intervals) {
-      if (intervals.length < 6) return null;
+      if (intervals.length < 4) return null;
       const counts = new Map();
       for (const ms of intervals) {
         let bpm = 60000 / ms;
@@ -3694,57 +3717,63 @@
       autoBpmState.rafId = requestAnimationFrame(detectBpmLoop);
 
       const deck = getActiveBpmDeck();
-      if (!deck) return;
+      if (!deck) {
+        updateAutoBpmUI(true, 'PLAY TRACK');
+        return;
+      }
 
       const curId = (players[deck] && typeof players[deck].getVideoData === 'function')
         ? (players[deck].getVideoData()?.video_id || '')
         : '';
+      const now = performance.now();
       if (deck !== autoBpmState.lastTrackDeck || curId !== autoBpmState.lastTrackId) {
         autoBpmState.lastTrackDeck = deck;
         autoBpmState.lastTrackId = curId;
         autoBpmState.intervals = [];
         autoBpmState.energyHistory = [];
         autoBpmState.lastPeakTime = 0;
-        updateAutoBpmUI(true, `${deck}: ...`);
+        autoBpmState.listenStartTime = now;
+        updateAutoBpmUI(true, `${deck}: 0/8`);
       }
 
       const data = autoBpmState.dataArray;
       autoBpmState.analyser.getByteFrequencyData(data);
       let energy = 0;
-      for (let i = 0; i < 10; i++) energy += data[i] * data[i];
-      energy = Math.sqrt(energy / 10);
+      for (let i = 0; i < 16; i++) energy += data[i] * data[i];
+      energy = Math.sqrt(energy / 16);
 
       const hist = autoBpmState.energyHistory;
       hist.push(energy);
-      if (hist.length > 43) hist.shift();
-      if (hist.length < 15) return;
+      if (hist.length > 36) hist.shift();
+      if (hist.length < 10) return;
 
       const avg = hist.reduce((a, b) => a + b, 0) / hist.length;
-      const threshold = Math.max(avg * 1.32, 35);
-      const now = performance.now();
+      const threshold = Math.max(avg * 1.18, 12);
 
-      if (energy > threshold && now - autoBpmState.lastPeakTime > 260) {
+      if (energy > threshold && now - autoBpmState.lastPeakTime > 240) {
         if (autoBpmState.lastPeakTime > 0) {
           const delta = now - autoBpmState.lastPeakTime;
-          if (delta >= 260 && delta <= 1500) {
+          if (delta >= 240 && delta <= 1500) {
             autoBpmState.intervals.push(delta);
-            if (autoBpmState.intervals.length > 24) autoBpmState.intervals.shift();
+            updateAutoBpmUI(true, `${deck}: ${Math.min(8, autoBpmState.intervals.length)}/8`);
+            const liveBpm = estimateBpmFromIntervals(autoBpmState.intervals);
+            if (liveBpm) {
+              setDeckBpm(deck, liveBpm, '');
+            }
           }
         }
         autoBpmState.lastPeakTime = now;
       }
 
-      if (now - autoBpmState.lastReportTime > 650 && autoBpmState.intervals.length >= 6) {
-        autoBpmState.lastReportTime = now;
-        const bpm = estimateBpmFromIntervals(autoBpmState.intervals);
-        if (bpm) {
-          const bpmEl = document.getElementById(`bpm-${deck.toLowerCase()}`);
-          if (bpmEl) {
-            bpmEl.innerText = `${bpm} BPM`;
-            bpmEl.classList.add('is-detected');
-          }
-          updateAutoBpmUI(true, `${deck}: ${bpm}`);
-        }
+      const elapsed = autoBpmState.listenStartTime ? now - autoBpmState.listenStartTime : 0;
+      if (autoBpmState.intervals.length >= 8 || (elapsed > 8500 && autoBpmState.intervals.length >= 4)) {
+        const finalBpm = estimateBpmFromIntervals(autoBpmState.intervals);
+        if (finalBpm) setDeckBpm(deck, finalBpm, curId);
+        stopBpmCapture();
+        return;
+      }
+      if (elapsed > 12000) {
+        stopBpmCapture();
       }
     }
 
