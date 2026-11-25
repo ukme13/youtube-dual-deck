@@ -686,6 +686,9 @@
       font-family: var(--mono);
     }
     .btn-loop:hover { color: var(--text); background: var(--surface-elevated); }
+    .btn-loop.has-saved {
+      color: #c4b5fd;
+    }
     .btn-loop.is-armed {
       background: rgba(245, 158, 11, 0.2);
       color: #fbbf24;
@@ -1649,7 +1652,7 @@
         </div>
         <div class="loop-group" id="loop-group-A">
           <button class="btn-loop btn-loop-step" onclick="retriggerLoop('A')" title="ดีดกลับจุดเริ่ม Loop (Reloop เพื่อจับจังหวะ)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:15px;">replay</span></button>
-          <button class="btn-loop" id="loop-btn-A" onclick="handleLoopClick('A')" title="กดครั้งที่ 1: เริ่มจุด Loop (IN) · ครั้งที่ 2: จบจุด Loop (OUT) · ครั้งที่ 3: ออก">LOOP</button>
+          <button class="btn-loop" id="loop-btn-A" onclick="handleLoopClick('A', event)" title="กดครั้งที่ 1: เริ่มจุด Loop (IN) · ครั้งที่ 2: จบจุด Loop (OUT) · ครั้งที่ 3: ออก">LOOP</button>
           <button class="btn-loop" onclick="openLoopModal('A')" title="ตั้ง/แก้ไขเวลา Loop แบบละเอียด (IN / OUT)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:14px;">tune</span></button>
         </div>
         <div class="pitch-control">
@@ -1852,7 +1855,7 @@
         </div>
         <div class="loop-group" id="loop-group-B">
           <button class="btn-loop btn-loop-step" onclick="retriggerLoop('B')" title="ดีดกลับจุดเริ่ม Loop (Reloop เพื่อจับจังหวะ)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:15px;">replay</span></button>
-          <button class="btn-loop" id="loop-btn-B" onclick="handleLoopClick('B')" title="กดครั้งที่ 1: เริ่มจุด Loop (IN) · ครั้งที่ 2: จบจุด Loop (OUT) · ครั้งที่ 3: ออก">LOOP</button>
+          <button class="btn-loop" id="loop-btn-B" onclick="handleLoopClick('B', event)" title="กดครั้งที่ 1: เริ่มจุด Loop (IN) · ครั้งที่ 2: จบจุด Loop (OUT) · ครั้งที่ 3: ออก">LOOP</button>
           <button class="btn-loop" onclick="openLoopModal('B')" title="ตั้ง/แก้ไขเวลา Loop แบบละเอียด (IN / OUT)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:14px;">tune</span></button>
         </div>
         <div class="pitch-control">
@@ -2754,23 +2757,30 @@
       const p = players[deck];
       const dur = (p && p.getDuration) ? p.getDuration() : 0;
 
+      const hasSaved = !state.active && !state.armed && state.length > 0;
       if (btn) {
         btn.classList.toggle('is-armed', state.armed);
         btn.classList.toggle('active', state.active);
+        btn.classList.toggle('has-saved', hasSaved);
         if (state.armed) {
           btn.innerText = 'OUT?';
+          btn.title = 'คลิกอีกครั้งเพื่อตั้งจุด OUT (กด Esc เพื่อยกเลิก)';
         } else if (state.active) {
           btn.innerText = getEffectiveLoopFadeSec(deck) > 0 ? 'XFADE' : 'LOOPED';
+          btn.title = 'คลิกเพื่อปิด Loop (ยังจำค่าเดิมไว้) · Shift+คลิก เพื่ออัดใหม่';
+        } else if (hasSaved) {
+          btn.innerText = 'LOOP';
+          btn.title = `เปิด Loop เดิม (${formatTimeDec(state.start)}–${formatTimeDec(state.start + state.length)}) · Shift+คลิก เพื่ออัดใหม่`;
         } else {
           btn.innerText = 'LOOP';
+          btn.title = 'กดครั้งที่ 1: ตั้งจุด IN · ครั้งที่ 2: ตั้งจุด OUT';
         }
       }
       if (group) group.classList.toggle('has-loop', state.active);
       if (reloopBtn) {
-        const hasSaved = !state.active && !state.armed && state.length > 0;
         reloopBtn.classList.toggle('has-saved-loop', hasSaved);
         reloopBtn.title = hasSaved
-          ? `เปิดใช้ Loop ที่เซฟไว้ (${formatTimeDec(state.start)}–${formatTimeDec(state.start + state.length)})`
+          ? `ดีดกลับจุดเริ่ม Loop และเปิดใช้งาน (${formatTimeDec(state.start)}–${formatTimeDec(state.start + state.length)})`
           : 'ดีดกลับจุดเริ่ม Loop (Reloop เพื่อจับจังหวะ)';
       }
 
@@ -2788,21 +2798,35 @@
       }
     }
 
-    function handleLoopClick(deck) {
+    function cancelArmedLoop(deck) {
+      const state = loopState[deck];
+      if (!state || !state.armed) return;
+      state.armed = false;
+      if (state._backup) {
+        state.start = state._backup.start;
+        state.length = state._backup.length;
+        state.fadeSec = state._backup.fadeSec;
+        state._backup = null;
+      } else {
+        state.length = 0;
+      }
+      updateLoopVisual(deck);
+    }
+
+    function handleLoopClick(deck, event) {
       const state = loopState[deck];
       const p = players[deck];
       if (!p || !p.getCurrentTime) return;
       const cur = p.getCurrentTime();
+      const forceRec = Boolean(event && event.shiftKey);
+      const hasSaved = !state.active && !state.armed && state.length > 0;
 
-      if (!state.armed && !state.active) {
-        state.armed = true;
-        state.start = cur;
-        state.length = 0;
-      } else if (state.armed) {
+      if (state.armed) {
         if (cur > state.start + 0.25) {
           state.armed = false;
           state.active = true;
           state.length = cur - state.start;
+          state._backup = null;
           state.lastJumpAt = performance.now();
           p.seekTo(state.start, true);
           saveDeckLoopCache(deck);
@@ -2810,12 +2834,34 @@
             prepareLoopShadow(deck, true);
           }
         } else {
-          clearLoop(deck);
+          cancelArmedLoop(deck);
           return;
         }
-      } else {
+      } else if (forceRec) {
+        if (state.active) {
+          cancelLoopFade(deck, true);
+          state.active = false;
+        }
+        if (state.length > 0) {
+          state._backup = { start: state.start, length: state.length, fadeSec: state.fadeSec };
+        }
+        state.armed = true;
+        state.start = cur;
+        state.length = 0;
+      } else if (state.active) {
         clearLoop(deck);
         return;
+      } else if (hasSaved) {
+        state.active = true;
+        state.lastJumpAt = performance.now();
+        if (getEffectiveLoopFadeSec(deck) > 0) {
+          prepareLoopShadow(deck, true);
+        }
+      } else {
+        state._backup = null;
+        state.armed = true;
+        state.start = cur;
+        state.length = 0;
       }
       updateLoopVisual(deck);
     }
@@ -2848,7 +2894,10 @@
     function clearLoop(deck, wipeLength = false) {
       loopState[deck].active = false;
       loopState[deck].armed = false;
-      if (wipeLength) loopState[deck].length = 0;
+      if (wipeLength) {
+        loopState[deck].length = 0;
+        loopState[deck]._backup = null;
+      }
       cancelLoopFade(deck, true);
       updateLoopVisual(deck);
     }
@@ -4186,6 +4235,8 @@
     document.addEventListener('keyup', (e) => {
       const code = e.code;
       if (code === 'Escape') {
+        cancelArmedLoop('A');
+        cancelArmedLoop('B');
         closeFadeModal();
         closeLoopModal();
         const popup = document.getElementById('shortcut-popup');
