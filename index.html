@@ -2263,6 +2263,12 @@
       const cur = (p && p.getCurrentTime) ? p.getCurrentTime() : 0;
       const id = which === 'in' ? 'loop-in-input' : 'loop-out-input';
       document.getElementById(id).value = formatTimeDec(+cur.toFixed(1));
+      if (which === 'out') {
+        const inSec = Math.max(0, parseTimeInput(document.getElementById('loop-in-input').value));
+        if (cur > inSec + 0.25) {
+          applyLoopModal();
+        }
+      }
     }
 
     function presetLoopModal(mode) {
