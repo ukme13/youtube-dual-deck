@@ -1522,6 +1522,9 @@
         <span class="deck-title-text" id="title-a" title="ชื่อคลิป">กำลังรอโหลดเพลง...</span>
         <button type="button" class="bpm-tag" id="bpm-a" onclick="openBpmEdit('A')" title="คลิกเพื่อพิมพ์ BPM เอง">-- BPM</button>
         <input type="number" class="bpm-edit-input" id="bpm-input-a" min="40" max="240" step="1" placeholder="BPM" style="display:none;" onkeydown="handleBpmInputKey(event, 'A')" onblur="commitBpmEdit('A')">
+        <button type="button" class="btn-bpm-search" onclick="tapBpm('A')" title="กดเคาะตามจังหวะเพื่อหา BPM (Tap Tempo)">
+          <span class="material-symbols-rounded" style="font-size:13px;">touch_app</span>
+        </button>
         <button type="button" class="btn-bpm-search" onclick="searchBpmOnline('A')" title="ค้นหา BPM เพลงนี้บน Google">
           <span class="material-symbols-rounded" style="font-size:13px;">search</span>
         </button>
@@ -1721,6 +1724,9 @@
         <span class="deck-title-text" id="title-b" title="ชื่อคลิป">กำลังรอโหลดเพลง...</span>
         <button type="button" class="bpm-tag" id="bpm-b" onclick="openBpmEdit('B')" title="คลิกเพื่อพิมพ์ BPM เอง">-- BPM</button>
         <input type="number" class="bpm-edit-input" id="bpm-input-b" min="40" max="240" step="1" placeholder="BPM" style="display:none;" onkeydown="handleBpmInputKey(event, 'B')" onblur="commitBpmEdit('B')">
+        <button type="button" class="btn-bpm-search" onclick="tapBpm('B')" title="กดเคาะตามจังหวะเพื่อหา BPM (Tap Tempo)">
+          <span class="material-symbols-rounded" style="font-size:13px;">touch_app</span>
+        </button>
         <button type="button" class="btn-bpm-search" onclick="searchBpmOnline('B')" title="ค้นหา BPM เพลงนี้บน Google">
           <span class="material-symbols-rounded" style="font-size:13px;">search</span>
         </button>
@@ -2338,7 +2344,9 @@
         }
         const avgInterval = totalInterval / (tapTimes[deck].length - 1);
         const bpm = Math.round(60000 / avgInterval);
-        document.getElementById(`bpm-${deck.toLowerCase()}`).innerText = `${bpm} BPM`;
+        if (bpm >= 40 && bpm <= 240) {
+          setDeckBpm(deck, bpm, getDeckVideoId(deck));
+        }
       }
     }
 
