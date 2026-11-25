@@ -452,6 +452,11 @@
       color: #0b0b0b;
       border-color: #ffffff;
     }
+    .btn-loop-step.has-saved-loop {
+      border-color: rgba(139, 92, 246, 0.65);
+      color: #c4b5fd;
+      background: rgba(139, 92, 246, 0.16);
+    }
     .mixer-head-row {
       display: flex;
       align-items: center;
@@ -2036,13 +2041,13 @@
       players.A = new YT.Player('player-a', {
         videoId: '0UmE0QH-AA0',
         playerVars: { controls: 0, disablekb: 1, rel: 0 },
-        events: { onReady: () => { updateVolumes(); if (bpmCache['0UmE0QH-AA0']) setDeckBpm('A', bpmCache['0UmE0QH-AA0']); } }
+        events: { onReady: () => { updateVolumes(); if (bpmCache['0UmE0QH-AA0']) setDeckBpm('A', bpmCache['0UmE0QH-AA0']); loadSavedLoopForTrack('A', '0UmE0QH-AA0'); } }
       });
 
       players.B = new YT.Player('player-b', {
         videoId: 'fxViBvmTM_o',
         playerVars: { controls: 0, disablekb: 1, rel: 0 },
-        events: { onReady: () => { updateVolumes(); if (bpmCache['fxViBvmTM_o']) setDeckBpm('B', bpmCache['fxViBvmTM_o']); } }
+        events: { onReady: () => { updateVolumes(); if (bpmCache['fxViBvmTM_o']) setDeckBpm('B', bpmCache['fxViBvmTM_o']); loadSavedLoopForTrack('B', 'fxViBvmTM_o'); } }
       });
 
       setInterval(tickEngine, 200);
@@ -2187,7 +2192,8 @@
           updateHotCueUI(deck, slot);
         });
 
-        clearLoop(deck);
+        clearLoop(deck, true);
+        loadSavedLoopForTrack(deck, videoId);
         tapTimes[deck] = [];
         const bpmEl = document.getElementById(`bpm-${deck.toLowerCase()}`);
         const cachedBpm = bpmCache[videoId];
@@ -2334,11 +2340,43 @@
       }
     }
 
-    // --- Manual IN / OUT Loop + 50ms Engine + Micro-Fade ---
+    // --- Manual IN / OUT Loop + 50ms Engine + Micro-Fade + Loop Memory ---
+    let loopCache = safeStorageGet('yt_dj_loop_cache', {});
+
+    function getDeckVideoId(deck) {
+      const p = players[deck];
+      return (p && typeof p.getVideoData === 'function' ? p.getVideoData()?.video_id : '')
+        || extractVideoId(document.getElementById(`url-${deck.toLowerCase()}`)?.value || '');
+    }
+
+    function saveDeckLoopCache(deck) {
+      const state = loopState[deck];
+      const vid = getDeckVideoId(deck);
+      if (!vid || !state || state.length <= 0) return;
+      loopCache[vid] = { start: +state.start.toFixed(2), length: +state.length.toFixed(2) };
+      safeStorageSet('yt_dj_loop_cache', loopCache);
+      renderQueue();
+    }
+
+    function loadSavedLoopForTrack(deck, videoId) {
+      const saved = videoId ? loopCache[videoId] : null;
+      if (saved && saved.length > 0) {
+        loopState[deck].start = saved.start;
+        loopState[deck].length = saved.length;
+        loopState[deck].active = false;
+        loopState[deck].armed = false;
+      } else {
+        loopState[deck].start = 0;
+        loopState[deck].length = 0;
+      }
+      updateLoopVisual(deck);
+    }
+
     function updateLoopVisual(deck) {
       const state = loopState[deck];
       const btn = document.getElementById(`loop-btn-${deck}`);
       const group = document.getElementById(`loop-group-${deck}`);
+      const reloopBtn = group ? group.querySelector('.btn-loop-step') : null;
       const rangeEl = document.getElementById(`loop-range-${deck.toLowerCase()}`);
       const p = players[deck];
       const dur = (p && p.getDuration) ? p.getDuration() : 0;
@@ -2355,6 +2393,13 @@
         }
       }
       if (group) group.classList.toggle('has-loop', state.active);
+      if (reloopBtn) {
+        const hasSaved = !state.active && !state.armed && state.length > 0;
+        reloopBtn.classList.toggle('has-saved-loop', hasSaved);
+        reloopBtn.title = hasSaved
+          ? `เปิดใช้ Loop ที่เซฟไว้ (${formatTimeDec(state.start)}–${formatTimeDec(state.start + state.length)})`
+          : 'ดีดกลับจุดเริ่ม Loop (Reloop เพื่อจับจังหวะ)';
+      }
 
       if (rangeEl) {
         rangeEl.classList.toggle('is-armed', state.armed);
@@ -2387,6 +2432,7 @@
           state.length = cur - state.start;
           state.lastJumpAt = performance.now();
           p.seekTo(state.start, true);
+          saveDeckLoopCache(deck);
         } else {
           clearLoop(deck);
           return;
@@ -2401,7 +2447,15 @@
     function retriggerLoop(deck) {
       const state = loopState[deck];
       const p = players[deck];
-      if ((!state.active && !state.armed) || !p || !p.seekTo) return;
+      if (!p || !p.seekTo) return;
+      if (!state.active && !state.armed) {
+        if (state.length > 0) {
+          state.active = true;
+          updateLoopVisual(deck);
+        } else {
+          return;
+        }
+      }
       state.lastJumpAt = performance.now();
       p.seekTo(state.start, true);
       if (p.getPlayerState && p.getPlayerState() !== YT.PlayerState.PLAYING) {
@@ -2411,10 +2465,10 @@
       }
     }
 
-    function clearLoop(deck) {
+    function clearLoop(deck, wipeLength = false) {
       loopState[deck].active = false;
       loopState[deck].armed = false;
-      loopState[deck].length = 0;
+      if (wipeLength) loopState[deck].length = 0;
       updateLoopVisual(deck);
     }
 
@@ -2435,8 +2489,8 @@
       const state = loopState[deck];
       const p = players[deck];
       const cur = (p && p.getCurrentTime) ? p.getCurrentTime() : 0;
-      const inVal = (state.active || state.armed) ? state.start : 0;
-      const outVal = state.active ? (state.start + state.length) : (inVal + 8);
+      const inVal = (state.active || state.armed || state.length > 0) ? state.start : 0;
+      const outVal = (state.active || state.length > 0) ? (state.start + state.length) : (inVal + 8);
       document.getElementById('loop-modal-title').innerText = `LOOP EDITOR · DECK ${deck}`;
       document.getElementById('loop-in-input').value = formatTimeDec(inVal);
       document.getElementById('loop-out-input').value = formatTimeDec(outVal);
@@ -2457,6 +2511,7 @@
       state.start = inSec;
       state.length = +(outSec - inSec).toFixed(2);
       updateLoopVisual(loopModalDeck);
+      saveDeckLoopCache(loopModalDeck);
     }
 
     function nudgeLoopInput(which, delta) {
@@ -2521,11 +2576,18 @@
         }
       }
       updateLoopVisual(loopModalDeck);
+      saveDeckLoopCache(loopModalDeck);
       closeLoopModal();
     }
 
     function clearLoopFromModal() {
-      clearLoop(loopModalDeck);
+      const vid = getDeckVideoId(loopModalDeck);
+      if (vid && loopCache[vid]) {
+        delete loopCache[vid];
+        safeStorageSet('yt_dj_loop_cache', loopCache);
+        renderQueue();
+      }
+      clearLoop(loopModalDeck, true);
       closeLoopModal();
     }
 
@@ -3224,6 +3286,8 @@
           : '';
         const qBpm = bpmCache[item.videoId];
         const bpmTag = qBpm ? `<span class="queue-cue-tag" style="color:#e4e4e7; background:rgba(255,255,255,0.1);">${qBpm} BPM</span>` : '';
+        const qLoop = loopCache[item.videoId];
+        const loopTag = qLoop ? `<span class="queue-cue-tag" style="color:#c4b5fd; background:rgba(139,92,246,0.16);">LOOP ${formatTimeDec(qLoop.start)}–${formatTimeDec(qLoop.start + qLoop.length)}</span>` : '';
         const hcCount = item.hotCues ? Object.values(item.hotCues).filter(v => v !== null).length : 0;
         const hcTag = hcCount > 0 ? `<span class="queue-cue-tag" style="color:#93c5fd; background:rgba(59,130,246,0.14);">HC×${hcCount}</span>` : '';
         const f = item.fadeIn;
@@ -3252,6 +3316,7 @@
                 <span class="queue-id">${safeId}</span>
                 <span class="queue-cue-tag">CUE ${safeCue}</span>
                 ${bpmTag}
+                ${loopTag}
                 ${fadeTag}
                 ${hcTag}
               </div>
