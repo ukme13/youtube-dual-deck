@@ -1459,6 +1459,7 @@
           <button class="btn-loop btn-loop-step" onclick="scaleLoop('A', 0.5)" title="ย่อช่วง Loop ลงครึ่งหนึ่ง">÷2</button>
           <button class="btn-loop" id="loop-btn-A" onclick="handleLoopClick('A')" title="กดครั้งที่ 1: เริ่มจุด Loop (IN) · ครั้งที่ 2: จบจุด Loop (OUT) · ครั้งที่ 3: ออก">LOOP</button>
           <button class="btn-loop btn-loop-step" onclick="scaleLoop('A', 2)" title="ขยายช่วง Loop เป็น 2 เท่า">×2</button>
+          <button class="btn-loop" onclick="openLoopModal('A')" title="ตั้ง/แก้ไขเวลา Loop แบบละเอียด (IN / OUT)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:14px;">tune</span></button>
         </div>
         <div class="pitch-control">
           <button class="btn-nudge" id="nudge-A-down" onmousedown="nudgeSpeed('A', -0.10, 'down')" onmouseup="nudgeSpeed('A', null)" onmouseleave="nudgeSpeed('A', null)" title="กดค้างเพื่อชะลอจังหวะชั่วคราว -0.10x (คีย์ลัด Z)">-</button>
@@ -1646,6 +1647,7 @@
           <button class="btn-loop btn-loop-step" onclick="scaleLoop('B', 0.5)" title="ย่อช่วง Loop ลงครึ่งหนึ่ง">÷2</button>
           <button class="btn-loop" id="loop-btn-B" onclick="handleLoopClick('B')" title="กดครั้งที่ 1: เริ่มจุด Loop (IN) · ครั้งที่ 2: จบจุด Loop (OUT) · ครั้งที่ 3: ออก">LOOP</button>
           <button class="btn-loop btn-loop-step" onclick="scaleLoop('B', 2)" title="ขยายช่วง Loop เป็น 2 เท่า">×2</button>
+          <button class="btn-loop" onclick="openLoopModal('B')" title="ตั้ง/แก้ไขเวลา Loop แบบละเอียด (IN / OUT)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:14px;">tune</span></button>
         </div>
         <div class="pitch-control">
           <button class="btn-nudge" id="nudge-B-down" onmousedown="nudgeSpeed('B', -0.10, 'down')" onmouseup="nudgeSpeed('B', null)" onmouseleave="nudgeSpeed('B', null)" title="กดค้างเพื่อชะลอจังหวะชั่วคราว -0.10x (คีย์ลัด N)">-</button>
@@ -1795,6 +1797,55 @@
       <div class="adv-actions">
         <button id="adv-reset-btn" onclick="resetFadeSettings()" style="background:transparent; color:var(--muted);">รีเซ็ตค่าเริ่มต้น</button>
         <button onclick="applyFadeSettings()" style="background:var(--accent); color:#000; font-weight:700; padding:8px 18px;">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loop Editor Modal -->
+  <div class="modal-backdrop" id="loop-edit-modal" onclick="if(event.target===this) closeLoopModal()">
+    <div class="adv-modal" role="dialog" aria-label="Loop Editor">
+      <div class="adv-modal-header">
+        <span style="display:inline-flex; align-items:center; gap:6px;"><span class="material-symbols-rounded" style="color:#a855f7;">loop</span> <span id="loop-modal-title">LOOP EDITOR · DECK A</span></span>
+        <button class="btn-del" onclick="closeLoopModal()" title="ปิด"><span class="material-symbols-rounded" style="font-size:18px;">close</span></button>
+      </div>
+
+      <div class="adv-field">
+        <span>ทางลัดตั้งช่วง Loop</span>
+        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:6px;">
+          <button onclick="presetLoopModal('start4')" style="padding:7px 4px; font-size:0.72rem; font-family:var(--mono);">0:00 → 4s</button>
+          <button onclick="presetLoopModal('start8')" style="padding:7px 4px; font-size:0.72rem; font-family:var(--mono);">0:00 → 8s</button>
+          <button onclick="presetLoopModal('now4')" style="padding:7px 4px; font-size:0.72rem; font-family:var(--mono);">Now + 4s</button>
+          <button onclick="presetLoopModal('now8')" style="padding:7px 4px; font-size:0.72rem; font-family:var(--mono);">Now + 8s</button>
+        </div>
+      </div>
+
+      <div class="adv-field">
+        <span>จุดเริ่ม (IN · วินาที หรือ mm:ss)</span>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button onclick="nudgeLoopInput('in', -0.5)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">-0.5</button>
+          <button onclick="nudgeLoopInput('in', -0.1)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">-0.1</button>
+          <input type="text" id="loop-in-input" value="0:00" style="text-align:center; font-family:var(--mono);">
+          <button onclick="nudgeLoopInput('in', 0.1)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">+0.1</button>
+          <button onclick="nudgeLoopInput('in', 0.5)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">+0.5</button>
+          <button onclick="grabLoopNow('in')" style="padding:6px 10px; font-size:0.72rem;">Now</button>
+        </div>
+      </div>
+
+      <div class="adv-field">
+        <span>จุดจบ (OUT · วินาที หรือ mm:ss)</span>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button onclick="nudgeLoopInput('out', -0.5)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">-0.5</button>
+          <button onclick="nudgeLoopInput('out', -0.1)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">-0.1</button>
+          <input type="text" id="loop-out-input" value="0:08" style="text-align:center; font-family:var(--mono);">
+          <button onclick="nudgeLoopInput('out', 0.1)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">+0.1</button>
+          <button onclick="nudgeLoopInput('out', 0.5)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">+0.5</button>
+          <button onclick="grabLoopNow('out')" style="padding:6px 10px; font-size:0.72rem;">Now</button>
+        </div>
+      </div>
+
+      <div class="adv-actions">
+        <button onclick="clearLoopFromModal()" style="background:transparent; color:var(--muted);">ล้าง Loop</button>
+        <button onclick="applyLoopModal()" style="background:#8b5cf6; color:#fff; font-weight:700; padding:8px 18px;">เริ่ม Loop</button>
       </div>
     </div>
   </div>
@@ -2168,6 +2219,90 @@
       loopState[deck].armed = false;
       loopState[deck].length = 0;
       updateLoopVisual(deck);
+    }
+
+    let loopModalDeck = 'A';
+
+    function formatTimeDec(sec) {
+      sec = Math.max(0, sec);
+      const m = Math.floor(sec / 60);
+      const rem = sec - m * 60;
+      const whole = Math.floor(rem);
+      const frac = Math.round((rem - whole) * 10);
+      const base = `${m}:${whole < 10 ? '0' : ''}${whole}`;
+      return frac > 0 ? `${base}.${frac}` : base;
+    }
+
+    function openLoopModal(deck) {
+      loopModalDeck = deck;
+      const state = loopState[deck];
+      const p = players[deck];
+      const cur = (p && p.getCurrentTime) ? p.getCurrentTime() : 0;
+      const inVal = (state.active || state.armed) ? state.start : 0;
+      const outVal = state.active ? (state.start + state.length) : (inVal + 8);
+      document.getElementById('loop-modal-title').innerText = `LOOP EDITOR · DECK ${deck}`;
+      document.getElementById('loop-in-input').value = formatTimeDec(inVal);
+      document.getElementById('loop-out-input').value = formatTimeDec(outVal);
+      document.getElementById('loop-edit-modal').classList.add('open');
+    }
+
+    function closeLoopModal() {
+      document.getElementById('loop-edit-modal').classList.remove('open');
+    }
+
+    function nudgeLoopInput(which, delta) {
+      const id = which === 'in' ? 'loop-in-input' : 'loop-out-input';
+      const el = document.getElementById(id);
+      const cur = parseTimeInput(el.value);
+      const next = Math.max(0, +(cur + delta).toFixed(1));
+      el.value = formatTimeDec(next);
+    }
+
+    function grabLoopNow(which) {
+      const p = players[loopModalDeck];
+      const cur = (p && p.getCurrentTime) ? p.getCurrentTime() : 0;
+      const id = which === 'in' ? 'loop-in-input' : 'loop-out-input';
+      document.getElementById(id).value = formatTimeDec(+cur.toFixed(1));
+    }
+
+    function presetLoopModal(mode) {
+      const p = players[loopModalDeck];
+      const cur = (p && p.getCurrentTime) ? p.getCurrentTime() : 0;
+      let s = 0, len = 4;
+      if (mode === 'start4') { s = 0; len = 4; }
+      else if (mode === 'start8') { s = 0; len = 8; }
+      else if (mode === 'now4') { s = +cur.toFixed(1); len = 4; }
+      else if (mode === 'now8') { s = +cur.toFixed(1); len = 8; }
+      document.getElementById('loop-in-input').value = formatTimeDec(s);
+      document.getElementById('loop-out-input').value = formatTimeDec(s + len);
+    }
+
+    function applyLoopModal() {
+      const inSec = Math.max(0, parseTimeInput(document.getElementById('loop-in-input').value));
+      const outSec = Math.max(inSec + 0.4, parseTimeInput(document.getElementById('loop-out-input').value));
+      const state = loopState[loopModalDeck];
+      state.armed = false;
+      state.active = true;
+      state.start = inSec;
+      state.length = +(outSec - inSec).toFixed(2);
+      state.lastJumpAt = performance.now();
+
+      const p = players[loopModalDeck];
+      if (p && p.seekTo) {
+        p.seekTo(state.start, true);
+        if (p.getPlayerState && p.getPlayerState() !== YT.PlayerState.PLAYING) {
+          if (p.unMute) p.unMute();
+          updateVolumes();
+          p.playVideo();
+        }
+      }
+      updateLoopVisual(loopModalDeck);
+      closeLoopModal();
+    }
+
+    function clearLoopFromModal() {
+      clearLoop(loopModalDeck);
+      closeLoopModal();
     }
 
     function tickLoop() {
@@ -3297,6 +3432,7 @@
       if (code === 'KeyN' || code === 'KeyM') nudgeSpeed('B', null);
       if (code === 'Escape') {
         closeFadeModal();
+        closeLoopModal();
         const popup = document.getElementById('shortcut-popup');
         const btn = document.getElementById('fab-help');
         if (popup) popup.classList.remove('open');
