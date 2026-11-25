@@ -1821,25 +1821,25 @@
 
       <div class="adv-field">
         <span>จุดเริ่ม (IN · วินาที หรือ mm:ss)</span>
-        <div style="display:flex; gap:6px; align-items:center;">
-          <button onclick="nudgeLoopInput('in', -0.5)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">-0.5</button>
-          <button onclick="nudgeLoopInput('in', -0.1)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">-0.1</button>
-          <input type="text" id="loop-in-input" value="0:00" style="text-align:center; font-family:var(--mono);">
-          <button onclick="nudgeLoopInput('in', 0.1)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">+0.1</button>
-          <button onclick="nudgeLoopInput('in', 0.5)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">+0.5</button>
-          <button onclick="grabLoopNow('in')" style="padding:6px 10px; font-size:0.72rem;">Now</button>
+        <div style="display:grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto auto; gap:5px; align-items:center;">
+          <button onclick="nudgeLoopInput('in', -0.5)" style="padding:6px 7px; font-family:var(--mono); font-size:0.72rem;">-0.5</button>
+          <button onclick="nudgeLoopInput('in', -0.1)" style="padding:6px 7px; font-family:var(--mono); font-size:0.72rem;">-0.1</button>
+          <input type="text" id="loop-in-input" value="0:00" style="min-width:0; width:100%; text-align:center; font-family:var(--mono); padding:7px 6px;">
+          <button onclick="nudgeLoopInput('in', 0.1)" style="padding:6px 7px; font-family:var(--mono); font-size:0.72rem;">+0.1</button>
+          <button onclick="nudgeLoopInput('in', 0.5)" style="padding:6px 7px; font-family:var(--mono); font-size:0.72rem;">+0.5</button>
+          <button onclick="grabLoopNow('in')" style="padding:6px 9px; font-size:0.72rem;">Now</button>
         </div>
       </div>
 
       <div class="adv-field">
         <span>จุดจบ (OUT · วินาที หรือ mm:ss)</span>
-        <div style="display:flex; gap:6px; align-items:center;">
-          <button onclick="nudgeLoopInput('out', -0.5)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">-0.5</button>
-          <button onclick="nudgeLoopInput('out', -0.1)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">-0.1</button>
-          <input type="text" id="loop-out-input" value="0:08" style="text-align:center; font-family:var(--mono);">
-          <button onclick="nudgeLoopInput('out', 0.1)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">+0.1</button>
-          <button onclick="nudgeLoopInput('out', 0.5)" style="padding:6px 8px; font-family:var(--mono); font-size:0.72rem;">+0.5</button>
-          <button onclick="grabLoopNow('out')" style="padding:6px 10px; font-size:0.72rem;">Now</button>
+        <div style="display:grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto auto; gap:5px; align-items:center;">
+          <button onclick="nudgeLoopInput('out', -0.5)" style="padding:6px 7px; font-family:var(--mono); font-size:0.72rem;">-0.5</button>
+          <button onclick="nudgeLoopInput('out', -0.1)" style="padding:6px 7px; font-family:var(--mono); font-size:0.72rem;">-0.1</button>
+          <input type="text" id="loop-out-input" value="0:08" style="min-width:0; width:100%; text-align:center; font-family:var(--mono); padding:7px 6px;">
+          <button onclick="nudgeLoopInput('out', 0.1)" style="padding:6px 7px; font-family:var(--mono); font-size:0.72rem;">+0.1</button>
+          <button onclick="nudgeLoopInput('out', 0.5)" style="padding:6px 7px; font-family:var(--mono); font-size:0.72rem;">+0.5</button>
+          <button onclick="grabLoopNow('out')" style="padding:6px 9px; font-size:0.72rem;">Now</button>
         </div>
       </div>
 
@@ -2156,9 +2156,9 @@
         btn.classList.toggle('is-armed', state.armed);
         btn.classList.toggle('active', state.active);
         if (state.armed) {
-          btn.innerText = `IN ${formatTime(state.start)}`;
+          btn.innerText = 'OUT?';
         } else if (state.active) {
-          btn.innerText = `${formatTime(state.start)}–${formatTime(state.start + state.length)}`;
+          btn.innerText = 'LOOPED';
         } else {
           btn.innerText = 'LOOP';
         }
