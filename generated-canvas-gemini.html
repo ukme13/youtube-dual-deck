@@ -1456,9 +1456,8 @@
           <button class="btn-cue" id="btn-cue-a" onclick="triggerCue('A')">CUE <span class="kbd-hint">Q</span></button>
         </div>
         <div class="loop-group" id="loop-group-A">
-          <button class="btn-loop btn-loop-step" onclick="scaleLoop('A', 0.5)" title="ย่อช่วง Loop ลงครึ่งหนึ่ง">÷2</button>
+          <button class="btn-loop btn-loop-step" onclick="retriggerLoop('A')" title="ดีดกลับจุดเริ่ม Loop (Reloop เพื่อจับจังหวะ)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:15px;">replay</span></button>
           <button class="btn-loop" id="loop-btn-A" onclick="handleLoopClick('A')" title="กดครั้งที่ 1: เริ่มจุด Loop (IN) · ครั้งที่ 2: จบจุด Loop (OUT) · ครั้งที่ 3: ออก">LOOP</button>
-          <button class="btn-loop btn-loop-step" onclick="scaleLoop('A', 2)" title="ขยายช่วง Loop เป็น 2 เท่า">×2</button>
           <button class="btn-loop" onclick="openLoopModal('A')" title="ตั้ง/แก้ไขเวลา Loop แบบละเอียด (IN / OUT)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:14px;">tune</span></button>
         </div>
         <div class="pitch-control">
@@ -1644,9 +1643,8 @@
           <button class="btn-cue" id="btn-cue-b" onclick="triggerCue('B')">CUE <span class="kbd-hint">P</span></button>
         </div>
         <div class="loop-group" id="loop-group-B">
-          <button class="btn-loop btn-loop-step" onclick="scaleLoop('B', 0.5)" title="ย่อช่วง Loop ลงครึ่งหนึ่ง">÷2</button>
+          <button class="btn-loop btn-loop-step" onclick="retriggerLoop('B')" title="ดีดกลับจุดเริ่ม Loop (Reloop เพื่อจับจังหวะ)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:15px;">replay</span></button>
           <button class="btn-loop" id="loop-btn-B" onclick="handleLoopClick('B')" title="กดครั้งที่ 1: เริ่มจุด Loop (IN) · ครั้งที่ 2: จบจุด Loop (OUT) · ครั้งที่ 3: ออก">LOOP</button>
-          <button class="btn-loop btn-loop-step" onclick="scaleLoop('B', 2)" title="ขยายช่วง Loop เป็น 2 เท่า">×2</button>
           <button class="btn-loop" onclick="openLoopModal('B')" title="ตั้ง/แก้ไขเวลา Loop แบบละเอียด (IN / OUT)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:14px;">tune</span></button>
         </div>
         <div class="pitch-control">
@@ -2207,11 +2205,17 @@
       updateLoopVisual(deck);
     }
 
-    function scaleLoop(deck, factor) {
+    function retriggerLoop(deck) {
       const state = loopState[deck];
-      if (!state.active) return;
-      state.length = Math.max(0.4, Math.min(60, +(state.length * factor).toFixed(2)));
-      updateLoopVisual(deck);
+      const p = players[deck];
+      if ((!state.active && !state.armed) || !p || !p.seekTo) return;
+      state.lastJumpAt = performance.now();
+      p.seekTo(state.start, true);
+      if (p.getPlayerState && p.getPlayerState() !== YT.PlayerState.PLAYING) {
+        if (p.unMute) p.unMute();
+        updateVolumes();
+        p.playVideo();
+      }
     }
 
     function clearLoop(deck) {
