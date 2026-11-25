@@ -1635,6 +1635,10 @@
       <div><strong>8 / 9 / 0</strong> Hot Cue B</div>
       <div><strong>Z / X</strong> Nudge A</div>
       <div><strong>N / M</strong> Nudge B</div>
+      <div><strong>W / S</strong> Speed A ±</div>
+      <div><strong>O / K</strong> Speed B ±</div>
+      <div><strong>R</strong> Reset A 1.0x</div>
+      <div><strong>I</strong> Reset B 1.0x</div>
       <div><strong>[ / ]</strong> Fade A / B</div>
       <div><strong>C</strong> Center CF</div>
       <div><strong>T</strong> Talk / Duck</div>
@@ -2835,6 +2839,16 @@
       }
     }
 
+    function stepSpeed(deck, delta) {
+      cancelResetSpeed(deck);
+      const slider = document.getElementById(`rate-${deck.toLowerCase()}`);
+      if (!slider) return;
+      const cur = parseFloat(slider.value) || 1;
+      const next = Math.max(0.75, Math.min(1.25, +(cur + delta).toFixed(2)));
+      slider.value = String(next);
+      setSpeed(deck, next);
+    }
+
     function resetSpeed(deck) {
       cancelResetSpeed(deck);
       const slider = document.getElementById(`rate-${deck.toLowerCase()}`);
@@ -3099,6 +3113,12 @@
       else if (code === 'KeyX' && !e.repeat) nudgeSpeed('A', 0.10, 'up');
       else if (code === 'KeyN' && !e.repeat) nudgeSpeed('B', -0.10, 'down');
       else if (code === 'KeyM' && !e.repeat) nudgeSpeed('B', 0.10, 'up');
+      else if (code === 'KeyW') stepSpeed('A', 0.05);
+      else if (code === 'KeyS') stepSpeed('A', -0.05);
+      else if (code === 'KeyR') resetSpeed('A');
+      else if (code === 'KeyO') stepSpeed('B', 0.05);
+      else if (code === 'KeyK') stepSpeed('B', -0.05);
+      else if (code === 'KeyI') resetSpeed('B');
       else if (code === 'Digit1' || code === 'Numpad1') jumpHotCue('A', 1);
       else if (code === 'Digit2' || code === 'Numpad2') jumpHotCue('A', 2);
       else if (code === 'Digit3' || code === 'Numpad3') jumpHotCue('A', 3);
