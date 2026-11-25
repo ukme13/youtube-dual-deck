@@ -1712,7 +1712,7 @@
           <input type="number" id="adv-fade-a" min="0" max="30" step="0.5" value="4" oninput="refreshFadeGraph()">
         </label>
         <label class="adv-field" id="adv-field-b">
-          <span style="color:#fda4af;">Fade → B (s)</span>
+          <span id="adv-label-b" style="color:#fda4af;">Fade → B (s)</span>
           <input type="number" id="adv-fade-b" min="0" max="30" step="0.5" value="4" oninput="refreshFadeGraph()">
         </label>
         <label class="adv-field" id="adv-field-next">
@@ -2321,8 +2321,8 @@
         if (legA) legA.innerText = `Fade → A (${tA}s)`;
         if (legB) legB.innerText = `Fade → B (${tB}s)`;
       } else {
-        if (legA) legA.innerText = `Fade In (${tA}s)`;
-        if (legB) legB.innerText = curve === 'cut' ? 'Instant Cut' : `${tA}s`;
+        if (legA) legA.innerText = `เพลงก่อนออก (${tA}s)`;
+        if (legB) legB.innerText = `เพลงนี้เข้า (${tB}s)`;
       }
       if (desc) {
         const names = { smooth: 'Smooth', linear: 'Linear', fast: 'Fast In', slow: 'Slow Tail', cut: 'Hard Cut' };
@@ -2341,9 +2341,12 @@
 
     function formatFadeLabel(f) {
       if (!f) return 'Fade';
-      if (f === 'cut' || f.curve === 'cut' || f.time === 0) return 'JUMP';
+      if (f === 'cut' || f.curve === 'cut') return 'JUMP';
       if (typeof f === 'number') return `${f}s`;
-      return `${f.time}s`;
+      const outT = f.outTime !== undefined ? f.outTime : (f.time ?? 4);
+      const inT = f.inTime !== undefined ? f.inTime : (f.time ?? 4);
+      if (outT === 0 && inT === 0) return 'JUMP';
+      return outT === inT ? `${inT}s` : `${outT}→${inT}s`;
     }
 
     function syncQueueFadeBtn() {
@@ -2362,17 +2365,19 @@
       const fieldB = document.getElementById('adv-field-b');
       const fieldNext = document.getElementById('adv-field-next');
       const labelA = document.getElementById('adv-label-a');
+      const labelB = document.getElementById('adv-label-b');
       const resetBtn = document.getElementById('adv-reset-btn');
       const timingRow = document.getElementById('adv-timing-row');
 
       if (lawGroup) lawGroup.style.display = isGlobal ? '' : 'none';
-      if (fieldB) fieldB.style.display = isGlobal ? '' : 'none';
+      if (fieldB) fieldB.style.display = '';
       if (fieldNext) fieldNext.style.display = isGlobal ? '' : 'none';
-      if (timingRow) timingRow.style.gridTemplateColumns = isGlobal ? 'repeat(3, 1fr)' : '1fr';
+      if (timingRow) timingRow.style.gridTemplateColumns = isGlobal ? 'repeat(3, 1fr)' : '1fr 1fr';
 
       if (isGlobal) {
         if (titleEl) titleEl.innerText = 'CROSSFADE CURVE & TIMING';
         if (labelA) { labelA.innerText = 'Fade → A (s)'; labelA.style.color = '#93c5fd'; }
+        if (labelB) { labelB.innerText = 'Fade → B (s)'; labelB.style.color = '#fda4af'; }
         if (resetBtn) resetBtn.innerText = 'รีเซ็ตค่าเริ่มต้น';
         document.getElementById('adv-fade-a').value = fadeSettings.timeA;
         document.getElementById('adv-fade-b').value = fadeSettings.timeB;
@@ -2381,13 +2386,19 @@
         selectFadeLaw(fadeSettings.law || 'power');
       } else {
         const existing = target === 'queue-new' ? pendingQueueFade : (trackQueue[target] ? trackQueue[target].fadeIn : null);
-        const curTime = existing && typeof existing === 'object' ? existing.time : (existing === 'cut' ? 0 : (typeof existing === 'number' ? existing : fadeSettings.timeA));
+        const curOut = existing && typeof existing === 'object'
+          ? (existing.outTime !== undefined ? existing.outTime : (existing.time ?? fadeSettings.timeA))
+          : (existing === 'cut' ? 0 : (typeof existing === 'number' ? existing : fadeSettings.timeA));
+        const curIn = existing && typeof existing === 'object'
+          ? (existing.inTime !== undefined ? existing.inTime : (existing.time ?? fadeSettings.timeB))
+          : (existing === 'cut' ? 0 : (typeof existing === 'number' ? existing : fadeSettings.timeB));
         const curCurve = existing && typeof existing === 'object' ? existing.curve : (existing === 'cut' ? 'cut' : fadeSettings.curve);
-        if (titleEl) titleEl.innerText = 'TRACK FADE-IN OVERRIDE';
-        if (labelA) { labelA.innerText = 'Fade In (วินาที)'; labelA.style.color = '#ffffff'; }
+        if (titleEl) titleEl.innerText = 'TRACK CROSSFADE OVERRIDE';
+        if (labelA) { labelA.innerText = 'เพลงก่อนออก Out (s)'; labelA.style.color = '#93c5fd'; }
+        if (labelB) { labelB.innerText = 'เพลงนี้เข้า In (s)'; labelB.style.color = '#fda4af'; }
         if (resetBtn) resetBtn.innerText = 'ใช้ค่า Default';
-        document.getElementById('adv-fade-a').value = curTime;
-        document.getElementById('adv-fade-b').value = curTime;
+        document.getElementById('adv-fade-a').value = curOut;
+        document.getElementById('adv-fade-b').value = curIn;
         selectFadeCurve(curCurve);
         selectFadeLaw(fadeSettings.law || 'power');
       }
@@ -2416,11 +2427,11 @@
 
     function applyFadeSettings() {
       const tA = Math.max(0, Math.min(30, parseFloat(document.getElementById('adv-fade-a').value) || 0));
+      const tB = Math.max(0, Math.min(30, parseFloat(document.getElementById('adv-fade-b').value) || 0));
       const selectedCurveBtn = document.querySelector('.curve-opt.is-selected');
       const curve = selectedCurveBtn ? selectedCurveBtn.dataset.curve : 'smooth';
 
       if (fadeModalTarget === 'global') {
-        const tB = Math.max(0, Math.min(30, parseFloat(document.getElementById('adv-fade-b').value) || 0));
         const nextSec = Math.max(2, Math.min(45, parseInt(document.getElementById('adv-auto-next-sec').value, 10) || 10));
         const selectedLawBtn = document.querySelector('.law-opt.is-selected');
         const law = selectedLawBtn ? selectedLawBtn.dataset.law : 'power';
@@ -2430,10 +2441,10 @@
         updateVolumes();
         syncFadeUI();
       } else if (fadeModalTarget === 'queue-new') {
-        pendingQueueFade = { time: tA, curve };
+        pendingQueueFade = { outTime: tA, inTime: tB, curve };
         syncQueueFadeBtn();
       } else if (typeof fadeModalTarget === 'number' && trackQueue[fadeModalTarget]) {
-        trackQueue[fadeModalTarget].fadeIn = { time: tA, curve };
+        trackQueue[fadeModalTarget].fadeIn = { outTime: tA, inTime: tB, curve };
         saveQueue();
         renderQueue();
       }
@@ -2705,11 +2716,11 @@
         const hcCount = item.hotCues ? Object.values(item.hotCues).filter(v => v !== null).length : 0;
         const hcTag = hcCount > 0 ? `<span class="queue-cue-tag" style="color:#93c5fd; background:rgba(59,130,246,0.14);">HC×${hcCount}</span>` : '';
         const f = item.fadeIn;
-        const isCut = f === 'cut' || (f && typeof f === 'object' && (f.curve === 'cut' || f.time === 0));
+        const fadeLbl = formatFadeLabel(f);
         const fadeTag = f
-          ? (isCut
+          ? (fadeLbl === 'JUMP'
             ? `<button type="button" class="queue-cue-tag" style="color:#fda4af; background:rgba(244,63,94,0.14); border:none; cursor:pointer;" onclick="openFadeModal(${idx})" title="คลิกเพื่อแก้ไข Fade">JUMP</button>`
-            : `<button type="button" class="queue-cue-tag" style="color:#fde68a; background:rgba(245,158,11,0.14); border:none; cursor:pointer;" onclick="openFadeModal(${idx})" title="คลิกเพื่อแก้ไข Fade">FADE ${typeof f === 'object' ? f.time : f}s</button>`)
+            : `<button type="button" class="queue-cue-tag" style="color:#fde68a; background:rgba(245,158,11,0.14); border:none; cursor:pointer;" onclick="openFadeModal(${idx})" title="คลิกเพื่อแก้ไข Fade">FADE ${fadeLbl}</button>`)
           : `<button type="button" class="queue-cue-tag" style="color:var(--muted); background:rgba(255,255,255,0.06); border:none; cursor:pointer;" onclick="openFadeModal(${idx})" title="คลิกเพื่อตั้งค่า Fade เฉพาะเพลงนี้">+ FADE</button>`;
         const isNext = idx === queueCursor;
         return `
@@ -2839,20 +2850,32 @@
       const slider = document.getElementById('crossfader');
       const startValue = parseFloat(slider.value);
       const override = deckFadeOverride[targetDeck];
-      let duration = 0;
+      let outDuration = 0;
+      let inDuration = 0;
       let activeCurve = fadeSettings.curve;
+
       if (override === 'cut') {
-        duration = 0;
+        outDuration = 0;
+        inDuration = 0;
         activeCurve = 'cut';
       } else if (override && typeof override === 'object') {
         activeCurve = override.curve || fadeSettings.curve;
-        duration = activeCurve === 'cut' ? 0 : (override.time * 1000);
+        const outSec = override.outTime !== undefined ? override.outTime : (override.time ?? fadeSettings.timeA);
+        const inSec = override.inTime !== undefined ? override.inTime : (override.time ?? fadeSettings.timeB);
+        outDuration = activeCurve === 'cut' ? 0 : outSec * 1000;
+        inDuration = activeCurve === 'cut' ? 0 : inSec * 1000;
       } else if (typeof override === 'number' && !isNaN(override)) {
-        duration = override * 1000;
+        outDuration = override * 1000;
+        inDuration = override * 1000;
       } else {
         const durationSec = targetDeck === 'A' ? fadeSettings.timeA : fadeSettings.timeB;
-        duration = fadeSettings.curve === 'cut' ? 0 : durationSec * 1000;
+        const ms = fadeSettings.curve === 'cut' ? 0 : durationSec * 1000;
+        outDuration = ms;
+        inDuration = ms;
       }
+
+      const totalDuration = Math.max(outDuration, inDuration);
+      const isIndependent = outDuration !== inDuration;
 
       function finishFade() {
         fadeAnimationId = null;
@@ -2872,7 +2895,7 @@
         }
       }
 
-      if (duration <= 0) {
+      if (totalDuration <= 0) {
         slider.value = targetValue;
         updateVolumes();
         finishFade();
@@ -2880,24 +2903,44 @@
       }
 
       const startTime = performance.now();
-      function easeCurve(p, curve) {
-        if (curve === 'linear') return p;
-        if (curve === 'fast') return 1 - Math.pow(1 - p, 3);
-        if (curve === 'slow') return Math.pow(p, 3);
-        return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-      }
 
       function animate(currentTime) {
         const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / duration, 1);
+        const progress = Math.min(elapsed / totalDuration, 1);
         const ease = evalFadeEase(progress, activeCurve);
-
         slider.value = startValue + (targetValue - startValue) * ease;
-        updateVolumes();
+
+        if (isIndependent) {
+          const pOut = outDuration <= 0 ? 1 : Math.min(elapsed / outDuration, 1);
+          const pIn = inDuration <= 0 ? 1 : Math.min(elapsed / inDuration, 1);
+          const eOut = evalFadeEase(pOut, activeCurve);
+          const eIn = evalFadeEase(pIn, activeCurve);
+          const isLinearLaw = fadeSettings && fadeSettings.law === 'linear';
+          const oldGain = isLinearLaw ? (1 - eOut) : Math.cos(eOut * 0.5 * Math.PI);
+          const newGain = isLinearLaw ? eIn : Math.sin(eIn * 0.5 * Math.PI);
+
+          const chA = parseFloat(document.getElementById('ch-vol-a').value);
+          const chB = parseFloat(document.getElementById('ch-vol-b').value);
+          const masterScale = parseFloat(document.getElementById('master-vol').value) / 100;
+          const gainA = targetDeck === 'A' ? newGain : oldGain;
+          const gainB = targetDeck === 'B' ? newGain : oldGain;
+          const finalVolA = Math.round(chA * gainA * masterScale);
+          const finalVolB = Math.round(chB * gainB * masterScale);
+
+          if (players.A && players.A.setVolume) players.A.setVolume(finalVolA);
+          if (players.B && players.B.setVolume) players.B.setVolume(finalVolB);
+          const lampA = document.getElementById('deck-lamp-a');
+          const lampB = document.getElementById('deck-lamp-b');
+          if (lampA) lampA.style.setProperty('--vol', (finalVolA / 100).toFixed(3));
+          if (lampB) lampB.style.setProperty('--vol', (finalVolB / 100).toFixed(3));
+        } else {
+          updateVolumes();
+        }
 
         if (progress < 1) {
           fadeAnimationId = requestAnimationFrame(animate);
         } else {
+          updateVolumes();
           finishFade();
         }
       }
