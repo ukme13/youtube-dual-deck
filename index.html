@@ -127,7 +127,7 @@
       cursor: grab;
       user-select: none;
       touch-action: none;
-      transition: left 0.25s ease, right 0.25s ease;
+      transition: left 0.34s cubic-bezier(0.22, 1, 0.36, 1), right 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease;
     }
     .side-vinyl.is-scratching { cursor: grabbing; }
     .side-vinyl.is-scratching .side-vinyl-disc { animation: none; }
@@ -153,8 +153,18 @@
     .side-vinyl.is-scratching .scratch-hud { opacity: 1; }
     .deck-a .side-vinyl { left: calc(-28.125% - 14px); }
     .deck-a .side-vinyl:hover { left: calc(-28.125% - 26px); }
+    .deck-a .side-vinyl.is-swapping {
+      left: 10%;
+      opacity: 0;
+      transition: left 0.24s cubic-bezier(0.4, 0, 1, 1), opacity 0.18s ease;
+    }
     .deck-b .side-vinyl { right: calc(-28.125% - 14px); }
     .deck-b .side-vinyl:hover { right: calc(-28.125% - 26px); }
+    .deck-b .side-vinyl.is-swapping {
+      right: 10%;
+      opacity: 0;
+      transition: right 0.24s cubic-bezier(0.4, 0, 1, 1), opacity 0.18s ease;
+    }
 
     .side-vinyl-disc {
       width: 100%;
@@ -2216,6 +2226,9 @@
         document.getElementById(`cue-input-${deck.toLowerCase()}`).value = seconds > 0 ? formatTime(seconds) : '';
         document.getElementById(`cue-status-${deck.toLowerCase()}`).innerText = `CUE: ${formatTime(seconds)}`;
         
+        deckLoadedIds[deck] = videoId;
+        urlInput.value = '';
+        swapVinylDisc(deck, videoId);
         players[deck].cueVideoById(videoId, seconds);
       }
     }
@@ -2352,10 +2365,34 @@
 
     // --- Manual IN / OUT Loop + 50ms Engine + Micro-Fade + Loop Memory ---
     let loopCache = safeStorageGet('yt_dj_loop_cache', {});
+    const deckLoadedIds = { A: '0UmE0QH-AA0', B: 'fxViBvmTM_o' };
+    const vinylSwapTimers = { A: null, B: null };
+
+    function swapVinylDisc(deck, videoId) {
+      if (!videoId) return;
+      const d = deck.toLowerCase();
+      const wrap = document.getElementById(`side-vinyl-${d}`);
+      const label = document.getElementById(`side-vinyl-label-${d}`);
+      if (!wrap || !label) return;
+      if (label.dataset.vid === videoId) return;
+      if (vinylSwapTimers[deck]) {
+        clearTimeout(vinylSwapTimers[deck]);
+        vinylSwapTimers[deck] = null;
+      }
+      label.dataset.vid = videoId;
+      wrap.classList.add('is-swapping');
+      vinylSwapTimers[deck] = setTimeout(() => {
+        label.style.backgroundImage = `url("https://i.ytimg.com/vi/${videoId}/mqdefault.jpg")`;
+        void wrap.offsetWidth;
+        wrap.classList.remove('is-swapping');
+        vinylSwapTimers[deck] = null;
+      }, 240);
+    }
 
     function getDeckVideoId(deck) {
       const p = players[deck];
       return (p && typeof p.getVideoData === 'function' ? p.getVideoData()?.video_id : '')
+        || deckLoadedIds[deck]
         || extractVideoId(document.getElementById(`url-${deck.toLowerCase()}`)?.value || '');
     }
 
@@ -3612,10 +3649,8 @@
           }
           if (vData && vData.video_id) {
             const sideLabelEl = document.getElementById(`side-vinyl-label-${deck.toLowerCase()}`);
-            const wantBg = `url("https://i.ytimg.com/vi/${vData.video_id}/mqdefault.jpg")`;
             if (sideLabelEl && sideLabelEl.dataset.vid !== vData.video_id) {
-              sideLabelEl.dataset.vid = vData.video_id;
-              sideLabelEl.style.backgroundImage = wantBg;
+              swapVinylDisc(deck, vData.video_id);
             }
           }
           const cur = p.getCurrentTime();
