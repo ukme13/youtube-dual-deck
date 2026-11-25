@@ -387,12 +387,50 @@
       white-space: nowrap;
       flex-shrink: 0;
       font-variant-numeric: tabular-nums;
+      cursor: pointer;
       transition: all 0.2s;
+    }
+    .bpm-tag:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.24);
     }
     .bpm-tag.is-detected {
       color: #ffffff;
       background: rgba(255, 255, 255, 0.14);
       border-color: rgba(255, 255, 255, 0.3);
+    }
+    .bpm-edit-input {
+      width: 64px;
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      color: #ffffff;
+      background: #1f1f23;
+      border: 1px solid rgba(255, 255, 255, 0.45);
+      border-radius: 6px;
+      padding: 2px 6px;
+      text-align: center;
+      outline: none;
+      flex-shrink: 0;
+    }
+    .btn-match-bpm {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #e4e4e7;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .btn-match-bpm:hover {
+      background: #ffffff;
+      color: #0b0b0b;
+      border-color: #ffffff;
     }
     .mixer-head-row {
       display: flex;
@@ -1455,7 +1493,8 @@
       </div>
       <div class="deck-title-bar">
         <span class="deck-title-text" id="title-a" title="ชื่อคลิป">กำลังรอโหลดเพลง...</span>
-        <span class="bpm-tag" id="bpm-a" title="จังหวะเพลง (BPM)">-- BPM</span>
+        <button type="button" class="bpm-tag" id="bpm-a" onclick="openBpmEdit('A')" title="คลิกเพื่อพิมพ์ BPM เอง">-- BPM</button>
+        <input type="number" class="bpm-edit-input" id="bpm-input-a" min="40" max="240" step="1" placeholder="BPM" style="display:none;" onkeydown="handleBpmInputKey(event, 'A')" onblur="commitBpmEdit('A')">
       </div>
       <div class="video-stage">
         <div class="side-vinyl" id="side-vinyl-a" title="คลิกเพื่อ Play/Pause หรือลากหมุนเพื่อสแครชเดินหน้า/ถอยหลัง">
@@ -1519,10 +1558,9 @@
           <button class="btn-loop" onclick="openLoopModal('A')" title="ตั้ง/แก้ไขเวลา Loop แบบละเอียด (IN / OUT)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:14px;">tune</span></button>
         </div>
         <div class="pitch-control">
-          <button class="btn-nudge" id="nudge-A-down" onmousedown="nudgeSpeed('A', -0.10, 'down')" onmouseup="nudgeSpeed('A', null)" onmouseleave="nudgeSpeed('A', null)" title="กดค้างเพื่อชะลอจังหวะชั่วคราว -0.10x (คีย์ลัด Z)">-</button>
-          <input type="range" id="rate-a" class="pitch-slider" min="0.75" max="1.25" step="0.05" value="1" oninput="cancelResetSpeed('A'); setSpeed('A', this.value)" title="ปรับความเร็ว (Pitch)">
+          <input type="range" id="rate-a" class="pitch-slider" min="0.75" max="1.25" step="0.01" value="1" oninput="cancelResetSpeed('A'); setSpeed('A', this.value)" title="ปรับความเร็ว (Pitch)">
           <button class="btn-pitch-reset" id="rate-val-a" onclick="resetSpeed('A')" title="คลิกเพื่อค่อยๆ รีเซ็ตกลับเป็น 1.00x">1.00x</button>
-          <button class="btn-nudge" id="nudge-A-up" onmousedown="nudgeSpeed('A', 0.10, 'up')" onmouseup="nudgeSpeed('A', null)" onmouseleave="nudgeSpeed('A', null)" title="กดค้างเพื่อเร่งจังหวะชั่วคราว +0.10x (คีย์ลัด X)">+</button>
+          <button class="btn-match-bpm" id="btn-match-a" onclick="matchBpm('A')" title="ปรับความเร็วให้ BPM ตรงกับ Deck B">MATCH</button>
         </div>
       </div>
     </div>
@@ -1651,7 +1689,8 @@
       </div>
       <div class="deck-title-bar">
         <span class="deck-title-text" id="title-b" title="ชื่อคลิป">กำลังรอโหลดเพลง...</span>
-        <span class="bpm-tag" id="bpm-b" title="จังหวะเพลง (BPM)">-- BPM</span>
+        <button type="button" class="bpm-tag" id="bpm-b" onclick="openBpmEdit('B')" title="คลิกเพื่อพิมพ์ BPM เอง">-- BPM</button>
+        <input type="number" class="bpm-edit-input" id="bpm-input-b" min="40" max="240" step="1" placeholder="BPM" style="display:none;" onkeydown="handleBpmInputKey(event, 'B')" onblur="commitBpmEdit('B')">
       </div>
       <div class="video-stage">
         <div class="side-vinyl" id="side-vinyl-b" title="คลิกเพื่อ Play/Pause หรือลากหมุนเพื่อสแครชเดินหน้า/ถอยหลัง">
@@ -1715,10 +1754,9 @@
           <button class="btn-loop" onclick="openLoopModal('B')" title="ตั้ง/แก้ไขเวลา Loop แบบละเอียด (IN / OUT)" style="padding: 5px 6px;"><span class="material-symbols-rounded" style="font-size:14px;">tune</span></button>
         </div>
         <div class="pitch-control">
-          <button class="btn-nudge" id="nudge-B-down" onmousedown="nudgeSpeed('B', -0.10, 'down')" onmouseup="nudgeSpeed('B', null)" onmouseleave="nudgeSpeed('B', null)" title="กดค้างเพื่อชะลอจังหวะชั่วคราว -0.10x (คีย์ลัด N)">-</button>
-          <input type="range" id="rate-b" class="pitch-slider" min="0.75" max="1.25" step="0.05" value="1" oninput="cancelResetSpeed('B'); setSpeed('B', this.value)" title="ปรับความเร็ว (Pitch)">
+          <input type="range" id="rate-b" class="pitch-slider" min="0.75" max="1.25" step="0.01" value="1" oninput="cancelResetSpeed('B'); setSpeed('B', this.value)" title="ปรับความเร็ว (Pitch)">
           <button class="btn-pitch-reset" id="rate-val-b" onclick="resetSpeed('B')" title="คลิกเพื่อค่อยๆ รีเซ็ตกลับเป็น 1.00x">1.00x</button>
-          <button class="btn-nudge" id="nudge-B-up" onmousedown="nudgeSpeed('B', 0.10, 'up')" onmouseup="nudgeSpeed('B', null)" onmouseleave="nudgeSpeed('B', null)" title="กดค้างเพื่อเร่งจังหวะชั่วคราว +0.10x (คีย์ลัด M)">+</button>
+          <button class="btn-match-bpm" id="btn-match-b" onclick="matchBpm('B')" title="ปรับความเร็วให้ BPM ตรงกับ Deck A">MATCH</button>
         </div>
       </div>
     </div>
@@ -1972,13 +2010,13 @@
       players.A = new YT.Player('player-a', {
         videoId: '0UmE0QH-AA0',
         playerVars: { controls: 0, disablekb: 1, rel: 0 },
-        events: { onReady: () => updateVolumes() }
+        events: { onReady: () => { updateVolumes(); if (bpmCache['0UmE0QH-AA0']) setDeckBpm('A', bpmCache['0UmE0QH-AA0']); } }
       });
 
       players.B = new YT.Player('player-b', {
         videoId: 'fxViBvmTM_o',
         playerVars: { controls: 0, disablekb: 1, rel: 0 },
-        events: { onReady: () => updateVolumes() }
+        events: { onReady: () => { updateVolumes(); if (bpmCache['fxViBvmTM_o']) setDeckBpm('B', bpmCache['fxViBvmTM_o']); } }
       });
 
       setInterval(tickEngine, 200);
@@ -2127,6 +2165,7 @@
         tapTimes[deck] = [];
         const bpmEl = document.getElementById(`bpm-${deck.toLowerCase()}`);
         const cachedBpm = bpmCache[videoId];
+        deckBpms[deck] = cachedBpm || null;
         if (bpmEl) {
           bpmEl.innerText = cachedBpm ? `${cachedBpm} BPM` : '-- BPM';
           bpmEl.classList.toggle('is-detected', Boolean(cachedBpm));
@@ -2170,24 +2209,81 @@
       }
     }
 
-    // --- Nudge Speed ---
-    function nudgeSpeed(deck, deltaOrNull, dir = null) {
-      const p = players[deck];
-      if (!p || !p.setPlaybackRate) return;
-      
-      const btnDown = document.getElementById(`nudge-${deck}-down`);
-      const btnUp = document.getElementById(`nudge-${deck}-up`);
-      const baseRate = parseFloat(document.getElementById(`rate-${deck.toLowerCase()}`).value) || 1;
+    // --- Match BPM & Manual BPM Edit ---
+    function matchBpm(deck) {
+      const other = deck === 'A' ? 'B' : 'A';
+      const myBpm = deckBpms[deck];
+      const otherBpm = deckBpms[other];
+      if (!myBpm || !otherBpm) {
+        alert('กรุณาวัดหรือพิมพ์ BPM ของทั้ง 2 ฝั่งก่อนกด Match ครับ');
+        return;
+      }
+      const otherRate = parseFloat(document.getElementById(`rate-${other.toLowerCase()}`)?.value) || 1;
+      const effectiveOtherBpm = otherBpm * otherRate;
+      const rawRate = effectiveOtherBpm / myBpm;
+      const clampedRate = Math.max(0.75, Math.min(1.25, +rawRate.toFixed(2)));
+      cancelResetSpeed(deck);
+      const slider = document.getElementById(`rate-${deck.toLowerCase()}`);
+      if (slider) slider.value = String(clampedRate);
+      setSpeed(deck, clampedRate);
+    }
 
-      if (deltaOrNull !== null) {
-        const targetRate = Math.max(0.75, Math.min(1.25, +(baseRate + deltaOrNull).toFixed(2)));
-        p.setPlaybackRate(targetRate);
-        if (dir === 'down' && btnDown) btnDown.classList.add('nudging');
-        if (dir === 'up' && btnUp) btnUp.classList.add('nudging');
-      } else {
-        p.setPlaybackRate(baseRate);
-        if (btnDown) btnDown.classList.remove('nudging');
-        if (btnUp) btnUp.classList.remove('nudging');
+    function openBpmEdit(deck) {
+      const d = deck.toLowerCase();
+      const btn = document.getElementById(`bpm-${d}`);
+      const input = document.getElementById(`bpm-input-${d}`);
+      if (!btn || !input) return;
+      input.dataset.cancel = '';
+      input.value = deckBpms[deck] ? String(deckBpms[deck]) : '';
+      btn.style.display = 'none';
+      input.style.display = 'inline-block';
+      input.focus();
+      input.select();
+    }
+
+    function handleBpmInputKey(e, deck) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.target.blur();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.target.dataset.cancel = '1';
+        e.target.blur();
+      }
+    }
+
+    function commitBpmEdit(deck) {
+      const d = deck.toLowerCase();
+      const btn = document.getElementById(`bpm-${d}`);
+      const input = document.getElementById(`bpm-input-${d}`);
+      if (!btn || !input) return;
+
+      const cancelled = input.dataset.cancel === '1';
+      input.dataset.cancel = '';
+      input.style.display = 'none';
+      btn.style.display = '';
+      if (cancelled) return;
+
+      const raw = input.value.trim();
+      const p = players[deck];
+      const vid = (p && typeof p.getVideoData === 'function' ? p.getVideoData()?.video_id : '')
+        || extractVideoId(document.getElementById(`url-${d}`)?.value || '');
+
+      if (!raw) {
+        deckBpms[deck] = null;
+        btn.innerText = '-- BPM';
+        btn.classList.remove('is-detected');
+        if (vid && bpmCache[vid]) {
+          delete bpmCache[vid];
+          safeStorageSet('yt_dj_bpm_cache', bpmCache);
+          renderQueue();
+        }
+        return;
+      }
+
+      const num = Math.round(parseFloat(raw));
+      if (Number.isFinite(num) && num >= 40 && num <= 240) {
+        setDeckBpm(deck, num, vid);
       }
     }
 
@@ -3100,6 +3196,8 @@
         const thumbUrl = /^[a-zA-Z0-9_-]{11}$/.test(item.videoId)
           ? `https://i.ytimg.com/vi/${safeId}/mqdefault.jpg`
           : '';
+        const qBpm = bpmCache[item.videoId];
+        const bpmTag = qBpm ? `<span class="queue-cue-tag" style="color:#e4e4e7; background:rgba(255,255,255,0.1);">${qBpm} BPM</span>` : '';
         const hcCount = item.hotCues ? Object.values(item.hotCues).filter(v => v !== null).length : 0;
         const hcTag = hcCount > 0 ? `<span class="queue-cue-tag" style="color:#93c5fd; background:rgba(59,130,246,0.14);">HC×${hcCount}</span>` : '';
         const f = item.fadeIn;
@@ -3127,6 +3225,7 @@
               <div class="queue-sub">
                 <span class="queue-id">${safeId}</span>
                 <span class="queue-cue-tag">CUE ${safeCue}</span>
+                ${bpmTag}
                 ${fadeTag}
                 ${hcTag}
               </div>
@@ -3488,10 +3587,6 @@
       else if (code === 'KeyP') triggerCue('B');
       else if (code === 'KeyL') togglePlay('B');
       else if (code === 'KeyT') toggleTalkDuck();
-      else if (code === 'KeyZ' && !e.repeat) nudgeSpeed('A', -0.10, 'down');
-      else if (code === 'KeyX' && !e.repeat) nudgeSpeed('A', 0.10, 'up');
-      else if (code === 'KeyN' && !e.repeat) nudgeSpeed('B', -0.10, 'down');
-      else if (code === 'KeyM' && !e.repeat) nudgeSpeed('B', 0.10, 'up');
       else if (code === 'KeyW') stepSpeed('A', 0.05);
       else if (code === 'KeyS') stepSpeed('A', -0.05);
       else if (code === 'KeyR') resetSpeed('A');
@@ -3530,8 +3625,6 @@
 
     document.addEventListener('keyup', (e) => {
       const code = e.code;
-      if (code === 'KeyZ' || code === 'KeyX') nudgeSpeed('A', null);
-      if (code === 'KeyN' || code === 'KeyM') nudgeSpeed('B', null);
       if (code === 'Escape') {
         closeFadeModal();
         closeLoopModal();
@@ -3544,7 +3637,9 @@
 
     // --- Auto BPM Detection via Tab Audio (Web Audio API) ---
     let bpmCache = safeStorageGet('yt_dj_bpm_cache', {});
+    const deckBpms = { A: null, B: null };
     function setDeckBpm(deck, bpm, videoId = '') {
+      deckBpms[deck] = bpm;
       const bpmEl = document.getElementById(`bpm-${deck.toLowerCase()}`);
       if (bpmEl) {
         bpmEl.innerText = `${bpm} BPM`;
@@ -3553,6 +3648,7 @@
       if (videoId) {
         bpmCache[videoId] = bpm;
         safeStorageSet('yt_dj_bpm_cache', bpmCache);
+        renderQueue();
       }
     }
 
